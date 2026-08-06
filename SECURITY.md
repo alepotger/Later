@@ -88,6 +88,7 @@ These are accepted trade-offs, not oversights:
 - **`reauth_required` is a denial-of-service on yourself if you miss the notification.** Mitigated by notifying, by the persistent web banner, and by keeping every pending item so nothing is lost when you fix it.
 - **MULTI mode users share one API quota.** One user can exhaust the day for everyone. Inherent to Google's per-project quota; surfaced in the UI. See [ADR-0013](docs/adr/0013-solo-and-multi-modes.md).
 - **`.env` on disk is as protected as the machine it's on.** For hosted deployments, use the platform secret store instead.
+- **A fresh deployment is claimable until you authorise it.** In SOLO mode the first successful OAuth claims the instance and every later attempt is refused — but that first one has to be open, or you could not complete setup. The window is between deploy and your own authorisation. On a new deployment, authorise before sharing the URL. There is no way to close this without a second credential, which would mean inventing an account system that §12 rules out.
 
 ## Secret hygiene in this repository
 

@@ -262,3 +262,19 @@ Some values in these batches **cannot honestly be written down yet**: your produ
 - **Add your production redirect URI** to the OAuth client from Step 7 — the URI will be `https://<your-worker>.<your-subdomain>.workers.dev/auth/callback`, which I'll give you resolved once the deployment exists
 - Set `PUBLIC_BASE_URL` to the deployed origin
 - Re-confirm publishing status from Step 6, since this is the point at which the 7-day clock starts mattering in earnest
+
+---
+
+## Status note — 2026-08-06
+
+**Phase 1 has landed and Batch 1 above is now the blocking step.** Nothing was guessed or marked done in my absence; the batch is exactly as written.
+
+Where things stand:
+
+- The product works. Share a YouTube link and it lands in the playlist, deduplicated, with quota accounted for. 336 tests, none of which need a credential.
+- The OAuth flow is written and tested against a **stubbed** Google token endpoint — every branch, including `invalid_grant`, refresh-token rotation, and transient failure. What it has never done is complete one **real** round-trip with Google. That is what Batch 1 unblocks, and it is the only Phase 1 item not verified.
+- You can see everything else working right now without touching a console: `USE_FIXTURES=true pnpm dev`. See [SETUP.md](../SETUP.md) Step 0.
+
+When you do Batch 1, the outputs go into your own local `.env` and nowhere else. I don't need them and shouldn't have them.
+
+**One thing to know before you deploy** (relevant at Batch 4, not now): between a deployment going live and you completing authorisation, whoever reaches `/auth/start` first claims the instance. In SOLO mode every later attempt is then refused, which is the protection — but the *first* one is open by necessity. On a fresh deployment, authorise before sharing the URL with anyone. Recorded in [SECURITY.md](../SECURITY.md).
