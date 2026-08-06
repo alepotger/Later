@@ -194,5 +194,5 @@ Tracked against §11 of the brief. Nothing here is checked until it has actually
 - [x] README states the Watch Later limitation plainly, above the fold
 - [ ] `docker compose up` works from a clean checkout with only `.env` filled in
 - [x] Zero secrets in git history
-- [ ] CI green
+- [x] CI green — [run 31103491442](https://github.com/alepotger/Later/actions/runs/31103491442): lint, typecheck, 336 tests, migration-drift check, both deploy targets bundled, full-history secret scan
 - [x] `ACTION-REQUIRED.md` complete and ordered for the current phase, with nothing guessed
