@@ -55,6 +55,51 @@ export async function getAccountByGoogleUserId(
   return rows[0];
 }
 
+/**
+ * Find an account by the SHA-256 hash of its ingest token. MULTI mode only.
+ *
+ * The token itself is never stored, so a leaked database cannot be used to post shares.
+ */
+export async function getAccountByIngestTokenHash(
+  db: Db,
+  hash: string,
+): Promise<Account | undefined> {
+  const rows = await db.select().from(accounts).where(eq(accounts.ingestTokenHash, hash)).limit(1);
+  return rows[0];
+}
+
+export async function getAccountByTelegramChatId(
+  db: Db,
+  chatId: string,
+): Promise<Account | undefined> {
+  const rows = await db.select().from(accounts).where(eq(accounts.telegramChatId, chatId)).limit(1);
+  return rows[0];
+}
+
+export async function setAccountIngestTokenHash(
+  db: Db,
+  accountId: string,
+  hash: string,
+  now: number,
+): Promise<void> {
+  await db
+    .update(accounts)
+    .set({ ingestTokenHash: hash, updatedAt: now })
+    .where(eq(accounts.id, accountId));
+}
+
+export async function setAccountTelegramChatId(
+  db: Db,
+  accountId: string,
+  chatId: string | null,
+  now: number,
+): Promise<void> {
+  await db
+    .update(accounts)
+    .set({ telegramChatId: chatId, updatedAt: now })
+    .where(eq(accounts.id, accountId));
+}
+
 export async function listAccounts(db: Db): Promise<Account[]> {
   return await db.select().from(accounts).orderBy(asc(accounts.createdAt));
 }

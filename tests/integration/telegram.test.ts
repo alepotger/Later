@@ -8,7 +8,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { listRecentItems, listPlaylistEntries } from '../../src/db/repo.ts';
+import { listPlaylistEntries, listRecentItems } from '../../src/db/repo.ts';
 import { createHarness, type Harness } from '../helpers/harness.ts';
 
 const VIDEO = 'dQw4w9WgXcQ';

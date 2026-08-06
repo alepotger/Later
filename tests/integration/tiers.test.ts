@@ -11,9 +11,9 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { fixturePlatformMetadata } from '../../src/adapters/platform/oembed.ts';
-import { listRecentItems, listPlaylistEntries } from '../../src/db/repo.ts';
-import { fixtureLlm } from '../../src/ports/llm.ts';
 import type { VideoCandidate } from '../../src/core/resolve/ranking.ts';
+import { listPlaylistEntries, listRecentItems } from '../../src/db/repo.ts';
+import { fixtureLlm } from '../../src/ports/llm.ts';
 import { createHarness, type Harness } from '../helpers/harness.ts';
 
 const VIDEO = 'dQw4w9WgXcQ';

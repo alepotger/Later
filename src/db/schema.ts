@@ -46,6 +46,12 @@ export const accounts = sqliteTable(
 
     /** MULTI mode: per-account ingest credential, stored only as a SHA-256 hash. */
     ingestTokenHash: text('ingest_token_hash'),
+    /**
+     * MULTI mode: which Telegram chat belongs to this account.
+     *
+     * SOLO does not need it — there is only one account, so any allowlisted chat is theirs.
+     */
+    telegramChatId: text('telegram_chat_id'),
 
     /** Drives the keep-alive sweep that defends against the six-month idle rule. */
     lastTokenRefreshAt: integer('last_token_refresh_at'),
@@ -58,6 +64,9 @@ export const accounts = sqliteTable(
   (t) => [
     uniqueIndex('accounts_google_user_id_uq').on(t.googleUserId),
     index('accounts_status_idx').on(t.status),
+    // Both are lookup keys for authenticating an inbound share in MULTI mode.
+    index('accounts_ingest_token_hash_idx').on(t.ingestTokenHash),
+    index('accounts_telegram_chat_idx').on(t.telegramChatId),
   ],
 );
 

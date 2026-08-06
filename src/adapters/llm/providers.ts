@@ -12,7 +12,6 @@
  */
 
 import type { VideoCandidate } from '../../core/resolve/ranking.ts';
-import type { Logger } from '../../ports/logger.ts';
 import {
   buildUserMessage,
   CANDIDATE_PROMPT,
@@ -20,6 +19,7 @@ import {
   type LlmPort,
   parseCandidates,
 } from '../../ports/llm.ts';
+import type { Logger } from '../../ports/logger.ts';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 

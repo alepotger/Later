@@ -10,6 +10,7 @@
  */
 
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import type { PlatformMetadataPort } from '../../src/adapters/platform/oembed.ts';
 import {
   createFixtureYouTubeClient,
   type FixtureYouTubeClient,
@@ -23,11 +24,10 @@ import { upsertAccount } from '../../src/db/repo.ts';
 import type { Account } from '../../src/db/schema.ts';
 import { createApp } from '../../src/http/app.ts';
 import { fixedClock } from '../../src/ports/clock.ts';
+import type { LlmPort } from '../../src/ports/llm.ts';
 import { silentLogger } from '../../src/ports/logger.ts';
 import type { Notification } from '../../src/ports/notifier.ts';
 import { recordingNotifier } from '../../src/ports/notifier.ts';
-import type { LlmPort } from '../../src/ports/llm.ts';
-import type { PlatformMetadataPort } from '../../src/adapters/platform/oembed.ts';
 import type { QuotaRecorder } from '../../src/ports/youtube.ts';
 import { buildRuntime, type Runtime } from '../../src/runtime.ts';
 

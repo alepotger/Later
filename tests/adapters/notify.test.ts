@@ -8,17 +8,17 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { renderNotification, toPlainText } from '../../src/adapters/notify/messages.ts';
 import {
   createTelegramClient,
   isAllowedChat,
   parseTelegramUpdate,
-  telegramNotifier,
   type TelegramConfig,
+  telegramNotifier,
 } from '../../src/adapters/notify/telegram.ts';
-import { renderNotification, toPlainText } from '../../src/adapters/notify/messages.ts';
 import { fanout, webhookNotifier } from '../../src/adapters/notify/webhook.ts';
 import { silentLogger } from '../../src/ports/logger.ts';
-import { recordingNotifier, type Notification } from '../../src/ports/notifier.ts';
+import { type Notification, recordingNotifier } from '../../src/ports/notifier.ts';
 
 const CONFIG: TelegramConfig = {
   botToken: '123:ABC',

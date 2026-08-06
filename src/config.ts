@@ -166,6 +166,14 @@ export function parseConfig(env: Env): ConfigResult {
         'to a YouTube playlist.',
     );
   }
+  if (mode === 'MULTI' && allowedEmails.length > 1) {
+    warnings.push(
+      `LATER_MODE=MULTI with ${allowedEmails.length} allowed accounts. They share one daily ` +
+        'YouTube quota, because the allowance belongs to the Google Cloud project rather than ' +
+        'the user — one person can exhaust the day for everyone. See TROUBLESHOOTING.md ' +
+        '("Running out of quota") for the increase request, or deploy separately per person.',
+    );
+  }
 
   const publicBaseUrlRaw = str(env, 'PUBLIC_BASE_URL') ?? 'http://localhost:8787';
   let publicBaseUrl = publicBaseUrlRaw.replace(/\/+$/, '');
@@ -190,13 +198,22 @@ export function parseConfig(env: Env): ConfigResult {
     );
   }
 
+  // MULTI issues one token per account from the web UI and never consults this one, so it is
+  // optional there — and warned about if set, because a secret that does nothing is a secret
+  // someone will eventually assume is doing something.
   const ingestToken = required(
     env,
     'INGEST_TOKEN',
-    useFixtures,
+    useFixtures || mode === 'MULTI',
     errors,
     "Generate one with: openssl rand -base64 32 | tr '+/' '-_' | tr -d '='",
   );
+  if (mode === 'MULTI' && str(env, 'INGEST_TOKEN') !== undefined) {
+    warnings.push(
+      'INGEST_TOKEN is ignored in MULTI mode. Each account mints its own from the web UI ' +
+        'after connecting Google; this value authenticates nothing.',
+    );
+  }
   if (ingestToken !== '' && ingestToken !== FIXTURE_PLACEHOLDER && ingestToken.length < 20) {
     errors.push(
       `INGEST_TOKEN is only ${ingestToken.length} characters. Anyone who guesses it can add ` +
@@ -327,7 +344,11 @@ export function parseConfig(env: Env): ConfigResult {
 
   const telegramBotToken = str(env, 'TELEGRAM_BOT_TOKEN');
   const telegramAllowedChatIds = list(env, 'TELEGRAM_ALLOWED_CHAT_IDS');
-  if (telegramBotToken !== undefined && telegramAllowedChatIds.length === 0) {
+  // MULTI is exempt: there, a chat proves ownership by running `/link` with a signed,
+  // short-lived code from the web UI, and an unlinked chat can do nothing but link. Requiring
+  // the env allowlist as well would mean editing config and redeploying for every new person,
+  // which is the friction MULTI exists to remove.
+  if (mode === 'SOLO' && telegramBotToken !== undefined && telegramAllowedChatIds.length === 0) {
     errors.push(
       'TELEGRAM_BOT_TOKEN is set but TELEGRAM_ALLOWED_CHAT_IDS is empty. Your bot username is ' +
         'discoverable, so anyone who finds it could add videos to your playlist. List your own ' +

@@ -6,14 +6,18 @@ import type { Context, MiddlewareHandler, Next } from 'hono';
 import { randomToken, timingSafeEqual } from '../core/bytes.ts';
 import { hmacSha256Hex } from '../crypto/vault.ts';
 import { incrementRateLimit } from '../db/repo.ts';
+import type { Account } from '../db/schema.ts';
 import type { Logger } from '../ports/logger.ts';
 import type { Runtime } from '../runtime.ts';
+import { authenticateIngest } from './accounts.ts';
 
 export interface AppBindings {
   Variables: {
     runtime: Runtime;
     requestId: string;
     logger: Logger;
+    /** Set by `requireIngestAuth`, so the handler never repeats the resolution. */
+    account: Account;
   };
 }
 
@@ -50,24 +54,41 @@ export function withRequestContext(runtime: Runtime): MiddlewareHandler<AppBindi
 }
 
 /**
- * Authenticate an ingest request.
+ * Authenticate an ingest request and attach the account it belongs to.
  *
- * A bearer token compared in constant time. HMAC signing is supported but off by default —
- * see docs/adr/0008-ingest-authentication.md for why requiring it would make the iOS
- * Shortcut unbuildable.
+ * A bearer token. HMAC signing is supported but off by default — see
+ * docs/adr/0008-ingest-authentication.md for why requiring it would make the iOS Shortcut
+ * unbuildable.
  *
- * Failures are deliberately indistinguishable: a missing token, a wrong token, and a bad
- * signature all produce the same 401 with no detail.
+ * The token *resolves* an account rather than being compared to one value, which is what makes
+ * MULTI mode a change to `authenticateIngest` alone and not to the pipeline. Failures are
+ * deliberately indistinguishable: a missing token, a wrong token, a token belonging to nobody,
+ * and a bad signature all produce the same 401 with no detail.
+ *
+ * The one non-401 rejection is a *correct* SOLO token on an instance where nobody has connected
+ * Google yet. That is a setup state rather than an authentication failure, and saying so is the
+ * difference between "fix your token" and "finish setting me up".
  */
 export function requireIngestAuth(): MiddlewareHandler<AppBindings> {
   return async (c: Context<AppBindings>, next: Next) => {
     const runtime = c.get('runtime');
-    const { token, hmacSecret } = runtime.config.ingest;
+    const { hmacSecret } = runtime.config.ingest;
 
     const header = c.req.header('authorization') ?? '';
     const presented = header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
 
-    if (presented === '' || !timingSafeEqual(presented, token)) {
+    const auth = await authenticateIngest(runtime, presented);
+    if (!auth.ok) {
+      if (auth.reason === 'not_connected') {
+        c.get('logger').warn('ingest rejected: no account is connected');
+        return c.json(
+          {
+            error: 'not_connected',
+            detail: `No Google account is connected yet. Open ${runtime.config.publicBaseUrl}/auth/start first.`,
+          },
+          409,
+        );
+      }
       c.get('logger').warn('ingest rejected: bad or missing token');
       return c.json({ error: 'unauthorized' }, 401);
     }
@@ -82,6 +103,7 @@ export function requireIngestAuth(): MiddlewareHandler<AppBindings> {
       }
     }
 
+    c.set('account', auth.account);
     await next();
     return;
   };

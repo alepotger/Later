@@ -12,12 +12,12 @@
  * whether the two agree well enough to trust. See docs/adr/0006 and 0009.
  */
 
-import type { Config } from '../config.ts';
-import { decide, rankResults, type RankedResult } from '../core/resolve/ranking.ts';
-import { extractFromText } from '../core/urls/extract.ts';
-import type { PlatformLink } from '../core/types.ts';
 import type { PlatformMetadataPort } from '../adapters/platform/oembed.ts';
 import { resolveShortlink } from '../adapters/platform/oembed.ts';
+import type { Config } from '../config.ts';
+import { decide, type RankedResult, rankResults } from '../core/resolve/ranking.ts';
+import type { PlatformLink } from '../core/types.ts';
+import { extractFromText } from '../core/urls/extract.ts';
 import type { LlmPort } from '../ports/llm.ts';
 import type { Logger } from '../ports/logger.ts';
 import type { YouTubeClient } from '../ports/youtube.ts';

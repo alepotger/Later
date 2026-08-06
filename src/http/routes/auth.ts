@@ -22,9 +22,10 @@ import {
   takeOAuthState,
   upsertAccount,
 } from '../../db/repo.ts';
+import { issueSessionCookie, mintIngestToken } from '../accounts.ts';
 import { html } from '../html.ts';
 import type { AppBindings } from '../middleware.ts';
-import { errorPage, layout } from '../views.ts';
+import { errorPage, ingestTokenPanel, layout } from '../views.ts';
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -78,6 +79,9 @@ export function registerAuthRoutes(app: Hono<AppBindings>): void {
       await runtime.tokens.onReauthorised(account.id);
       const scope = await runtime.forAccount(account.id);
       await scope.playlists.ensure(account.id, { force: true });
+      if (config.mode === 'MULTI') {
+        c.header('set-cookie', await issueSessionCookie(runtime, account.id));
+      }
       logger.warn('connected a fixtures-mode account; nothing will reach YouTube');
       return c.redirect('/', 302);
     }
@@ -218,6 +222,20 @@ export function registerAuthRoutes(app: Hono<AppBindings>): void {
 
       logger.info('account authorised', { accountId: account.id, email: identity.email });
 
+      // MULTI: this browser now *is* the account, and the account needs its own ingest token
+      // before any phone client can post as it. Both happen here rather than behind another
+      // click, so the connected page is the only screen a new user has to read.
+      //
+      // The token is minted only on a first connection. Re-authorising after Testing-status
+      // expiry must not silently break a Shortcut that is already configured.
+      let mintedToken: string | undefined;
+      if (config.mode === 'MULTI') {
+        c.header('set-cookie', await issueSessionCookie(runtime, account.id));
+        if (account.ingestTokenHash === null) {
+          mintedToken = (await mintIngestToken(runtime, account.id)).token;
+        }
+      }
+
       // Find-or-create the playlist now rather than on the first share, so a setup problem
       // surfaces while the user is still looking at the screen.
       let playlistNote = '';
@@ -250,6 +268,7 @@ export function registerAuthRoutes(app: Hono<AppBindings>): void {
                   Later will retry on your first share.
                 </p>`
             }
+            ${mintedToken ? ingestTokenPanel(mintedToken, config.publicBaseUrl) : null}
             <div class="row"><a href="/"><button>Start saving videos</button></a></div>
           </div>`,
         }),

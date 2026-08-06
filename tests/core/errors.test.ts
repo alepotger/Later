@@ -9,8 +9,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { YouTubeError, classifyGoogleError } from '../../src/core/errors.ts';
 import { parseIso8601Duration } from '../../src/adapters/youtube/google.ts';
+import { classifyGoogleError, YouTubeError } from '../../src/core/errors.ts';
 
 describe('invalid_grant', () => {
   it('is recognised from the OAuth endpoint shape', () => {

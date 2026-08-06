@@ -13,7 +13,6 @@ import type { Hono } from 'hono';
 import {
   getCachedVideos,
   getItemById,
-  getSoloAccount,
   listItemsByStatus,
   putCachedVideo,
   requeueItemJob,
@@ -21,9 +20,10 @@ import {
 } from '../../db/repo.ts';
 import type { Account, Item } from '../../db/schema.ts';
 import { processOne } from '../../pipeline/worker.ts';
+import type { Runtime } from '../../runtime.ts';
+import { resolveWebAccount } from '../accounts.ts';
 import type { AppBindings } from '../middleware.ts';
 import { errorPage, reviewPage } from '../views.ts';
-import type { Runtime } from '../../runtime.ts';
 
 /** Load an item, checking it belongs to the caller's account. */
 async function loadOwnedItem(runtime: Runtime, account: Account, id: string): Promise<Item | null> {
@@ -37,7 +37,7 @@ async function loadOwnedItem(runtime: Runtime, account: Account, id: string): Pr
 export function registerReviewRoutes(app: Hono<AppBindings>): void {
   app.get('/review', async (c) => {
     const runtime = c.get('runtime');
-    const account = await getSoloAccount(runtime.db);
+    const account = await resolveWebAccount(runtime, c.req.header('cookie'));
     if (!account) return c.redirect('/', 302);
 
     const held = await listItemsByStatus(runtime.db, account.id, ['held_for_review'], 50);
@@ -101,7 +101,7 @@ export function registerReviewRoutes(app: Hono<AppBindings>): void {
    */
   app.post('/review/:id/confirm', async (c) => {
     const runtime = c.get('runtime');
-    const account = await getSoloAccount(runtime.db);
+    const account = await resolveWebAccount(runtime, c.req.header('cookie'));
     if (!account) return c.redirect('/', 302);
 
     const item = await loadOwnedItem(runtime, account, c.req.param('id'));
@@ -126,7 +126,7 @@ export function registerReviewRoutes(app: Hono<AppBindings>): void {
 
   app.post('/review/:id/reject', async (c) => {
     const runtime = c.get('runtime');
-    const account = await getSoloAccount(runtime.db);
+    const account = await resolveWebAccount(runtime, c.req.header('cookie'));
     if (!account) return c.redirect('/', 302);
 
     const item = await loadOwnedItem(runtime, account, c.req.param('id'));

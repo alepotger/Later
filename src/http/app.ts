@@ -7,17 +7,12 @@
  */
 
 import { Hono } from 'hono';
-import {
-  countItemsByStatus,
-  getCachedVideos,
-  getSoloAccount,
-  listItemsByShareKey,
-  listRecentItems,
-} from '../db/repo.ts';
-import type { Account, ItemSource } from '../db/schema.ts';
+import { listItemsByShareKey } from '../db/repo.ts';
+import type { ItemSource } from '../db/schema.ts';
 import { processOne } from '../pipeline/worker.ts';
 import type { Runtime } from '../runtime.ts';
 import { ingest, summariseItems } from '../services/ingest.ts';
+import { noAccountPage, renderHome, webAccount } from './home.ts';
 import { html } from './html.ts';
 import { ICON_192_PNG_BASE64, ICON_512_PNG_BASE64 } from './icons.ts';
 import {
@@ -26,10 +21,11 @@ import {
   requireIngestAuth,
   withRequestContext,
 } from './middleware.ts';
+import { registerAccountRoutes } from './routes/account.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
 import { registerReviewRoutes } from './routes/review.ts';
 import { registerTelegramRoutes } from './routes/telegram.ts';
-import { errorPage, homePage, setupPage, shareResultFlash } from './views.ts';
+import { errorPage, shareResultFlash } from './views.ts';
 
 const VALID_SOURCES: ItemSource[] = ['web', 'ios-shortcut', 'pwa', 'telegram', 'api'];
 
@@ -39,6 +35,7 @@ export function createApp(runtime: Runtime): Hono<AppBindings> {
   app.use('*', withRequestContext(runtime));
 
   registerAuthRoutes(app);
+  registerAccountRoutes(app);
   registerTelegramRoutes(app);
   registerReviewRoutes(app);
 
@@ -105,17 +102,9 @@ export function createApp(runtime: Runtime): Hono<AppBindings> {
     requireIngestAuth(),
     async (c) => {
       const logger = c.get('logger');
-
-      const account = await resolveIngestAccount(runtime);
-      if (!account) {
-        return c.json(
-          {
-            error: 'not_connected',
-            detail: `No Google account is connected yet. Open ${runtime.config.publicBaseUrl}/auth/start first.`,
-          },
-          409,
-        );
-      }
+      // Resolved by `requireIngestAuth` from the bearer token: the one account in SOLO, the
+      // token's owner in MULTI.
+      const account = c.get('account');
 
       const payload = await readIngestBody(c);
       if (!payload.text || payload.text.trim() === '') {
@@ -176,15 +165,15 @@ export function createApp(runtime: Runtime): Hono<AppBindings> {
 
   // ─── Web UI ───────────────────────────────────────────────────────────────
   app.get('/', async (c) => {
-    const account = await resolveIngestAccount(runtime);
-    if (!account) return c.html(setupPage(runtime.config));
+    const account = await webAccount(c);
+    if (!account) return c.html(noAccountPage(runtime));
     return c.html(await renderHome(runtime, account, {}));
   });
 
   /** Paste box submit. Renders the outcome inline so it doubles as a debugging tool. */
   app.post('/share', async (c) => {
-    const account = await resolveIngestAccount(runtime);
-    if (!account) return c.html(setupPage(runtime.config));
+    const account = await webAccount(c);
+    if (!account) return c.html(noAccountPage(runtime));
 
     const form = await c.req.formData();
     const text = String(form.get('text') ?? '');
@@ -240,8 +229,8 @@ export function createApp(runtime: Runtime): Hono<AppBindings> {
       .filter((part): part is string => Boolean(part))
       .join('\n');
 
-    const account = await resolveIngestAccount(runtime);
-    if (!account) return c.html(setupPage(runtime.config));
+    const account = await webAccount(c);
+    if (!account) return c.html(noAccountPage(runtime));
 
     return c.html(
       await renderHome(runtime, account, {
@@ -274,17 +263,6 @@ export function createApp(runtime: Runtime): Hono<AppBindings> {
   });
 
   return app;
-}
-
-/**
- * Which account an ingest belongs to.
- *
- * SOLO resolves to the single account implicitly. MULTI will resolve it from the per-account
- * ingest token — the data model already carries `account_id` everywhere, so that is a change
- * to this function alone. See ADR-0013.
- */
-async function resolveIngestAccount(runtime: Runtime): Promise<Account | undefined> {
-  return await getSoloAccount(runtime.db);
 }
 
 interface IngestBody {
@@ -340,38 +318,4 @@ async function readIngestBody(c: {
   }
 
   return { text: body, source: 'api' };
-}
-
-async function renderHome(
-  runtime: Runtime,
-  account: Account,
-  options: { flash?: ReturnType<typeof html> | null; prefill?: string },
-): Promise<string> {
-  const items = await listRecentItems(runtime.db, account.id, 25);
-  const counts = await countItemsByStatus(runtime.db, account.id);
-
-  const videoIds = items
-    .map((item) => item.resolvedVideoId)
-    .filter((id): id is string => Boolean(id));
-  const cached = await getCachedVideos(runtime.db, [...new Set(videoIds)]);
-  const titles = new Map(
-    cached.filter((row) => row.title).map((row) => [row.videoId, row.title as string]),
-  );
-
-  const scope = await runtime.forAccount(account.id);
-  const quota = await scope.quota.summary();
-
-  return homePage({
-    config: runtime.config,
-    email: account.email,
-    playlistId: account.playlistId,
-    playlistName: account.playlistName ?? runtime.config.playlist.name,
-    items,
-    titles,
-    quota,
-    counts,
-    needsReauth: account.status === 'reauth_required',
-    ...(options.prefill !== undefined ? { prefill: options.prefill } : {}),
-    ...(options.flash !== undefined ? { flash: options.flash } : {}),
-  });
 }

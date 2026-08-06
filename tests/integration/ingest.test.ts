@@ -6,8 +6,8 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { listItemsByShareKey, listPlaylistEntries, listRecentItems } from '../../src/db/repo.ts';
 import { hmacSha256Hex } from '../../src/crypto/vault.ts';
+import { listItemsByShareKey, listPlaylistEntries, listRecentItems } from '../../src/db/repo.ts';
 import { createHarness, type Harness, INGEST_TOKEN } from '../helpers/harness.ts';
 
 const VIDEO = 'dQw4w9WgXcQ';

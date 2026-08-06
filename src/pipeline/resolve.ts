@@ -8,6 +8,7 @@
  * deliberate — see `claimAndAdd` below.
  */
 
+import type { PlatformMetadataPort } from '../adapters/platform/oembed.ts';
 import type { Config } from '../config.ts';
 import { YouTubeError } from '../core/errors.ts';
 import { extractFromText } from '../core/urls/extract.ts';
@@ -24,14 +25,13 @@ import {
 } from '../db/repo.ts';
 import type { ItemStatus } from '../db/schema.ts';
 import type { Clock } from '../ports/clock.ts';
+import type { LlmPort } from '../ports/llm.ts';
 import type { Logger } from '../ports/logger.ts';
 import type { Notifier } from '../ports/notifier.ts';
 import type { YouTubeClient, YouTubeVideo } from '../ports/youtube.ts';
-import type { LlmPort } from '../ports/llm.ts';
-import type { PlatformMetadataPort } from '../adapters/platform/oembed.ts';
-import { resolveHigherTiers } from './tiers.ts';
 import type { PlaylistService } from '../services/playlist.ts';
 import { ReauthRequiredError, type TokenService } from '../services/tokens.ts';
+import { resolveHigherTiers } from './tiers.ts';
 
 export interface ResolveDeps {
   db: Db;

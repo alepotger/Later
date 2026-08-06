@@ -132,6 +132,44 @@ describe('MULTI mode refuses to run wide open', () => {
   it('rejects an unknown mode', () => {
     expect(errorsFor({ ...MINIMAL, LATER_MODE: 'TEAM' }).join('\n')).toMatch(/SOLO or MULTI/);
   });
+
+  it('does not require INGEST_TOKEN, which authenticates nothing in MULTI', () => {
+    const { INGEST_TOKEN: _dropped, ...withoutToken } = MINIMAL;
+    const result = parseConfig({
+      ...withoutToken,
+      LATER_MODE: 'MULTI',
+      LATER_ALLOWED_EMAILS: 'a@example.com',
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('warns when INGEST_TOKEN is set anyway, so nobody trusts a dead secret', () => {
+    const warnings = warningsFor({
+      ...MINIMAL,
+      LATER_MODE: 'MULTI',
+      LATER_ALLOWED_EMAILS: 'a@example.com',
+    });
+    expect(warnings.join('\n')).toMatch(/INGEST_TOKEN is ignored in MULTI/);
+  });
+
+  it('warns that several accounts share one daily quota', () => {
+    const warnings = warningsFor({
+      ...MINIMAL,
+      LATER_MODE: 'MULTI',
+      LATER_ALLOWED_EMAILS: 'a@example.com,b@example.com,c@example.com',
+    });
+    expect(warnings.join('\n')).toMatch(/share one daily/);
+    expect(warnings.join('\n')).toMatch(/3 allowed accounts/);
+  });
+
+  it('does not warn about shared quota for a single-account MULTI instance', () => {
+    const warnings = warningsFor({
+      ...MINIMAL,
+      LATER_MODE: 'MULTI',
+      LATER_ALLOWED_EMAILS: 'a@example.com',
+    });
+    expect(warnings.join('\n')).not.toMatch(/share one daily/);
+  });
 });
 
 describe('Telegram cannot be left open to strangers', () => {
@@ -155,6 +193,16 @@ describe('Telegram cannot be left open to strangers', () => {
       ...MINIMAL,
       TELEGRAM_BOT_TOKEN: '123:abc',
       TELEGRAM_ALLOWED_CHAT_IDS: '-1001234567890,42',
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('does not require the allowlist in MULTI, where /link is the gate', () => {
+    const result = parseConfig({
+      ...MINIMAL,
+      LATER_MODE: 'MULTI',
+      LATER_ALLOWED_EMAILS: 'a@example.com',
+      TELEGRAM_BOT_TOKEN: '123:abc',
     });
     expect(result.ok).toBe(true);
   });

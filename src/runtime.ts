@@ -6,6 +6,7 @@
  * place that knows whether we are talking to real Google or to recorded responses.
  */
 
+import { geminiLlm, openAiCompatibleLlm } from './adapters/llm/providers.ts';
 import {
   createTelegramClient,
   type TelegramClient,
@@ -13,9 +14,7 @@ import {
   telegramNotifier,
 } from './adapters/notify/telegram.ts';
 import { fanout, webhookNotifier } from './adapters/notify/webhook.ts';
-import { geminiLlm, openAiCompatibleLlm } from './adapters/llm/providers.ts';
 import { createOEmbedClient, type PlatformMetadataPort } from './adapters/platform/oembed.ts';
-import { fixtureLlm, type LlmPort, noopLlm } from './ports/llm.ts';
 import {
   createFixtureYouTubeClient,
   type FixtureYouTubeClient,
@@ -28,6 +27,7 @@ import type { ResolveDeps } from './pipeline/resolve.ts';
 import type { WorkerDeps } from './pipeline/worker.ts';
 import type { Clock } from './ports/clock.ts';
 import { systemClock } from './ports/clock.ts';
+import { fixtureLlm, type LlmPort, noopLlm } from './ports/llm.ts';
 import { createLogger, type Logger } from './ports/logger.ts';
 import { type Notifier, nonBlocking, nullNotifier } from './ports/notifier.ts';
 import type { QuotaRecorder, YouTubeClient } from './ports/youtube.ts';

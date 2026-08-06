@@ -10,15 +10,23 @@
  *  1. The webhook secret proves the request really came from Telegram.
  *  2. The chat allowlist proves *which human* is talking. A bot's username is discoverable, so
  *     without this anyone who stumbles on the bot could write to the owner's playlist.
+ *
+ * MULTI adds a third answer to "which human": a chat linked to an account with `/link`, using a
+ * short-lived code from the web UI. In MULTI a linked chat is itself proof of ownership, so
+ * `TELEGRAM_ALLOWED_CHAT_IDS` becomes optional — asking the deployer to edit `.env` and redeploy
+ * for every household member would defeat the mode.
  */
 
 import type { Hono } from 'hono';
 import { isAllowedChat, parseTelegramUpdate } from '../../adapters/notify/telegram.ts';
 import { timingSafeEqual } from '../../core/bytes.ts';
-import { getSoloAccount, listItemsByShareKey } from '../../db/repo.ts';
+import { getAccountById, listItemsByShareKey, setAccountTelegramChatId } from '../../db/repo.ts';
 import { processOne } from '../../pipeline/worker.ts';
+import type { Runtime } from '../../runtime.ts';
 import { ingest, summariseItems } from '../../services/ingest.ts';
+import { resolveTelegramAccount } from '../accounts.ts';
 import type { AppBindings } from '../middleware.ts';
+import { verifyValue } from '../session.ts';
 
 export function registerTelegramRoutes(app: Hono<AppBindings>): void {
   app.post('/telegram/webhook', async (c) => {
@@ -49,7 +57,19 @@ export function registerTelegramRoutes(app: Hono<AppBindings>): void {
       return c.json({ ok: true });
     }
 
-    if (!isAllowedChat(telegramConfig, message.chatId)) {
+    const multi = runtime.config.mode === 'MULTI';
+    const account = await resolveTelegramAccount(runtime, message.chatId);
+
+    // SOLO: the env allowlist is the only gate, and config refuses to start without one.
+    //
+    // MULTI: an empty allowlist means "anyone may talk", because `/link` with a signed code is
+    // the real gate and an unlinked chat can do nothing else. A deployer who *does* set an
+    // allowlist in MULTI has opted into a narrower door, so it is still enforced.
+    const permitted = multi
+      ? telegramConfig.allowedChatIds.length === 0 || isAllowedChat(telegramConfig, message.chatId)
+      : isAllowedChat(telegramConfig, message.chatId);
+
+    if (!permitted) {
       // Silent by design: no reply, so a stranger probing the bot learns nothing about
       // whether it exists or who owns it.
       logger.warn('telegram message from a chat that is not allowlisted', {
@@ -66,7 +86,10 @@ export function registerTelegramRoutes(app: Hono<AppBindings>): void {
         'Send or forward me anything with a YouTube link in it and I will save the video to ' +
           `your ${runtime.config.playlist.name} playlist.\n\n` +
           'Forwarding a Reel or a TikTok works — I read the caption for a link.\n\n' +
-          `Status and recent saves: ${runtime.config.publicBaseUrl}`,
+          (multi && !account
+            ? `First, connect this chat to your account: open ${runtime.config.publicBaseUrl} ` +
+              'and send me the /link command it shows you.'
+            : `Status and recent saves: ${runtime.config.publicBaseUrl}`),
       );
       return c.json({ ok: true });
     }
@@ -76,12 +99,20 @@ export function registerTelegramRoutes(app: Hono<AppBindings>): void {
       return c.json({ ok: true });
     }
 
-    const account = await getSoloAccount(runtime.db);
+    if (multi && message.text.trim().toLowerCase().startsWith('/link')) {
+      const reply = await linkChat(runtime, message.chatId, message.text.trim().slice(5).trim());
+      await telegram.sendMessage(message.chatId, reply);
+      return c.json({ ok: true });
+    }
+
     if (!account) {
       await telegram.sendMessage(
         message.chatId,
-        'No Google account is connected yet. Open ' +
-          `${runtime.config.publicBaseUrl}/auth/start to connect one.`,
+        multi
+          ? `This chat is not connected to an account yet. Open ${runtime.config.publicBaseUrl} ` +
+              'and send me the /link command shown there.'
+          : 'No Google account is connected yet. Open ' +
+              `${runtime.config.publicBaseUrl}/auth/start to connect one.`,
       );
       return c.json({ ok: true });
     }
@@ -117,6 +148,32 @@ export function registerTelegramRoutes(app: Hono<AppBindings>): void {
 
     return c.json({ ok: true });
   });
+}
+
+/**
+ * Bind this chat to the account named in a signed link code. MULTI only.
+ *
+ * The code is an HMAC over the account ID with a 15-minute expiry, so nothing needs storing and
+ * a code that leaks after the fact is inert. Re-linking overwrites, which is also the fix for
+ * "I linked the wrong chat".
+ */
+async function linkChat(runtime: Runtime, chatId: string, code: string): Promise<string> {
+  const now = runtime.clock.now().getTime();
+  const accountId = await verifyValue(
+    runtime.config.secrets.sessionSecret,
+    'telegram-link',
+    code,
+    now,
+  );
+  if (!accountId) {
+    return 'That link code is not valid or has expired. Open Later in a browser and copy a fresh one — they last 15 minutes.';
+  }
+
+  const account = await getAccountById(runtime.db, accountId);
+  if (!account) return 'That link code refers to an account that no longer exists.';
+
+  await setAccountTelegramChatId(runtime.db, account.id, chatId, now);
+  return `Linked to ${account.email}. Forward me anything with a YouTube link in it.`;
 }
 
 function describeOutcome(

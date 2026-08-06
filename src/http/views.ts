@@ -151,6 +151,118 @@ export function setupPage(config: Config): string {
   return layout({ title: 'Later — setup', body, config });
 }
 
+/**
+ * MULTI mode with no session cookie.
+ *
+ * Deliberately not the SOLO setup page: this instance is already running and probably already
+ * has other people on it, so the message is "identify yourself", not "finish setting me up".
+ */
+export function signInPage(config: Config): string {
+  const body = html`
+    <p class="sub">This instance is shared. Sign in with Google to see your own shares.</p>
+    <div class="card">
+      <h2 style="margin-top:0">Sign in</h2>
+      <p>
+        Later will create a private playlist called <code>${config.playlist.name}</code> in your
+        account and add videos there. It cannot see anyone else's.
+      </p>
+      <div class="row"><a href="/auth/start"><button>Continue with Google</button></a></div>
+      <p class="item-meta" style="margin-bottom:0">
+        Only accounts listed in <code>LATER_ALLOWED_EMAILS</code> can connect. If yours is not
+        on it, ask whoever runs this instance.
+      </p>
+    </div>
+  `;
+  return layout({ title: 'Later — sign in', body, config });
+}
+
+/**
+ * A freshly minted ingest token, shown exactly once.
+ *
+ * Only the SHA-256 is stored, so this is genuinely the only time it can be displayed — which
+ * is worth saying on the screen rather than letting someone discover it by closing the tab.
+ */
+export function ingestTokenPanel(token: string, publicBaseUrl: string): Html {
+  return html`<div class="banner ok">
+    <strong>Your personal ingest token — copy it now</strong>
+    Later stores only a hash of this, so it cannot be shown again. It is what the iOS Shortcut,
+    the Telegram bot and <code>curl</code> use to prove a share is yours.
+    <pre
+      style="overflow-x:auto;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:.6rem;margin:.7rem 0 0"
+    ><code>${token}</code></pre>
+    <div class="item-meta" style="margin-top:.5rem">
+      Test it: <code>curl -X POST ${publicBaseUrl}/api/ingest -H "authorization: Bearer ${token}"
+      -d '{"text":"https://youtu.be/dQw4w9WgXcQ"}' -H 'content-type: application/json'</code>
+    </div>
+  </div>`;
+}
+
+/**
+ * The account panel, MULTI only.
+ *
+ * SOLO shows none of this: one account, one token in `.env`, nothing to choose or link. Adding
+ * it there would spend the onboarding budget on concepts that do not apply.
+ */
+export function multiAccountPanel(options: {
+  email: string;
+  hasIngestToken: boolean;
+  telegramLinkCode: string | null;
+  telegramLinked: boolean;
+  /** Your spend against the instance's, because the daily budget is one shared pool. */
+  quota: { yours: number; instance: number; budget: number };
+}): Html {
+  return html`<h2>Your account</h2>
+    <div class="card">
+      <div class="item-meta">Signed in as ${options.email}</div>
+      <p style="margin:.5rem 0 0">
+        You have used <strong>${options.quota.yours}</strong> of the
+        ${options.quota.instance} units spent on this instance today, out of
+        ${options.quota.budget}. The daily budget belongs to the Google Cloud project, so
+        everyone here shares one pool.
+      </p>
+
+      <div class="row">
+        <form method="post" action="/account/ingest-token">
+          <button type="submit" class="secondary">
+            ${options.hasIngestToken ? 'Replace my ingest token' : 'Create my ingest token'}
+          </button>
+        </form>
+        <form method="post" action="/auth/signout">
+          <button type="submit" class="secondary">Sign out</button>
+        </form>
+      </div>
+      ${when(
+        options.hasIngestToken,
+        () => html`<p class="item-meta" style="margin:.6rem 0 0">
+          Replacing it immediately stops every client using the old one. You will need to paste
+          the new token into your Shortcut or PWA again.
+        </p>`,
+      )}
+
+      ${when(
+        options.telegramLinkCode !== null,
+        () => html`<hr style="border:0;border-top:1px solid var(--line);margin:1rem 0" />
+          <div class="item-meta">Connect Telegram</div>
+          <p style="margin:.3rem 0 0">
+            Send this to the bot. It expires in 15 minutes and links that chat to your account.
+          </p>
+          <pre
+            style="overflow-x:auto;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:.6rem;margin:.6rem 0 0"
+          ><code>/link ${options.telegramLinkCode}</code></pre>`,
+      )}
+      ${when(
+        options.telegramLinked,
+        () => html`<hr style="border:0;border-top:1px solid var(--line);margin:1rem 0" />
+          <div class="item-meta">Telegram is connected to this account.</div>
+          <div class="row">
+            <form method="post" action="/account/telegram/unlink">
+              <button type="submit" class="secondary">Disconnect Telegram</button>
+            </form>
+          </div>`,
+      )}
+    </div>`;
+}
+
 const STATUS_LABEL: Record<ItemStatus, string> = {
   pending: 'queued',
   added: 'saved',
@@ -198,6 +310,8 @@ export function homePage(options: {
   /** Prefilled from the PWA share target so the box is ready to submit. */
   prefill?: string;
   flash?: Html | null;
+  /** MULTI's account panel. Absent in SOLO, which has no account concepts at all. */
+  extras?: Html | null;
 }): string {
   const { config, quota } = options;
 
@@ -267,6 +381,8 @@ export function homePage(options: {
           </ul>`
       }
     </div>
+
+    ${options.extras ?? null}
   `;
 
   return layout({ title: 'Later', body, config, banner });
