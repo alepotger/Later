@@ -7,6 +7,13 @@
  */
 
 import {
+  createTelegramClient,
+  type TelegramClient,
+  type TelegramConfig,
+  telegramNotifier,
+} from './adapters/notify/telegram.ts';
+import { fanout, webhookNotifier } from './adapters/notify/webhook.ts';
+import {
   createFixtureYouTubeClient,
   type FixtureYouTubeClient,
 } from './adapters/youtube/fixture.ts';
@@ -40,6 +47,9 @@ export interface Runtime {
   vault: Vault;
   notifier: Notifier;
   tokens: TokenService;
+  /** Present only when a bot token is configured. Used by the ingress route to reply. */
+  telegram: TelegramClient | undefined;
+  telegramConfig: TelegramConfig | undefined;
   forAccount(accountId: string): Promise<AccountScope>;
   worker(): Promise<WorkerDeps>;
   /** Run work after the response has been sent. Abstracts `waitUntil` vs a detached promise. */
@@ -102,8 +112,39 @@ export async function buildRuntime(options: BuildRuntimeOptions): Promise<Runtim
   const clock = options.clock ?? systemClock;
   const baseLogger = options.logger ?? createLogger({ level: config.logLevel });
 
+  // Build the configured channels. An explicit `notifier` (tests) replaces them entirely.
+  let telegram: TelegramClient | undefined;
+  let telegramConfig: TelegramConfig | undefined;
+  const channels: Notifier[] = [];
+
+  if (config.notify.telegramBotToken) {
+    telegramConfig = {
+      botToken: config.notify.telegramBotToken,
+      allowedChatIds: config.notify.telegramAllowedChatIds,
+      webhookSecret: config.notify.telegramWebhookSecret,
+    };
+    telegram = createTelegramClient(telegramConfig, {
+      logger: baseLogger,
+      ...(options.fetch ? { fetch: options.fetch } : {}),
+    });
+    channels.push(telegramNotifier(telegram, telegramConfig, config.notify.onSuccess));
+  }
+
+  if (config.notify.webhookUrl) {
+    channels.push(
+      webhookNotifier(
+        config.notify.webhookUrl,
+        { logger: baseLogger, ...(options.fetch ? { fetch: options.fetch } : {}) },
+        config.notify.onSuccess,
+      ),
+    );
+  }
+
+  const configured: Notifier =
+    options.notifier ?? (channels.length === 0 ? nullNotifier : fanout(channels));
+
   // A notification failure must never become a playlist failure.
-  const notifier = nonBlocking(options.notifier ?? nullNotifier, (error, notification) => {
+  const notifier = nonBlocking(configured, (error, notification) => {
     baseLogger.warn('notification delivery failed', {
       kind: notification.kind,
       error: error instanceof Error ? error.message : String(error),
@@ -149,6 +190,8 @@ export async function buildRuntime(options: BuildRuntimeOptions): Promise<Runtim
     vault,
     notifier,
     tokens,
+    telegram,
+    telegramConfig,
     forAccount,
 
     async worker(): Promise<WorkerDeps> {

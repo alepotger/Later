@@ -101,6 +101,13 @@ export interface HarnessOptions {
   /** Seed the fixture YouTube client — pre-existing playlists, extra videos, search results. */
   youtube?: FixtureYouTubeOptions;
   notifierFailing?: boolean;
+  /**
+   * Pass `null` to let the runtime build its real notification channels from config, instead of
+   * substituting the recording one. Used by the Telegram tests, which need the actual adapter.
+   */
+  notifier?: null;
+  /** Stub outbound HTTP (Telegram, Google token endpoint). The YouTube client is separate. */
+  fetch?: typeof fetch;
 }
 
 export async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
@@ -142,7 +149,9 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
     db,
     clock,
     logger: silentLogger,
-    notifier,
+    // `notifier: null` means "use the channels config asks for", so the real adapters run.
+    ...(options.notifier === null ? {} : { notifier }),
+    ...(options.fetch ? { fetch: options.fetch } : {}),
     youtubeFor: (_accountId, quota) => {
       currentQuota = quota;
       return youtube;

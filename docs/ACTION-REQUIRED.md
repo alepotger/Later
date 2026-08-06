@@ -278,3 +278,131 @@ Where things stand:
 When you do Batch 1, the outputs go into your own local `.env` and nowhere else. I don't need them and shouldn't have them.
 
 **One thing to know before you deploy** (relevant at Batch 4, not now): between a deployment going live and you completing authorisation, whoever reaches `/auth/start` first claims the instance. In SOLO mode every later attempt is then refused, which is the protection — but the *first* one is open by necessity. On a fresh deployment, authorise before sharing the URL with anyone. Recorded in [SECURITY.md](../SECURITY.md).
+
+---
+
+## Batch 2 — Telegram bot and the iOS Shortcut
+
+**Logged:** 2026-08-06 · **Needed before:** the phone clients can be *used* (the code is written and tested)
+**Estimated time:** ~10 minutes · **Waiting periods:** none
+**Blocks me?** No. Phase 2 is complete and tested against stubs. This sandbox cannot reach `api.telegram.org` and has no iPhone, so live verification is yours.
+
+### ⚠️ Read this first — do Batch 4 before this one
+
+**Both clients need a URL your phone and Telegram can reach, and `localhost` is not one.**
+
+- Telegram *pushes* updates to a webhook, so it needs a public HTTPS URL. There is no way around this.
+- Your phone can't reach a server on your laptop either.
+
+So the honest order is **deploy first, then set up the clients**. That inverts the phase numbering, and it is worth being straight about rather than sending you to configure a bot that cannot work.
+
+Two options:
+
+1. **Recommended: do Batch 4 (deploy to Cloudflare) first**, then come back here with your real URL. Free, no card, ~15 minutes.
+2. **Or use a tunnel** for a local trial: `cloudflared tunnel --url http://localhost:8787` prints a temporary HTTPS URL. Set `PUBLIC_BASE_URL` to it, restart, and use it below. The URL changes every restart, so this is for trying things, not for living with.
+
+Everything below assumes you have a public HTTPS base URL. It's written as `https://YOUR-LATER-URL`.
+
+---
+
+### Step 1 — Create the Telegram bot
+
+1. Open Telegram and message **[@BotFather](https://t.me/BotFather)**
+2. Send `/newbot`
+3. **Name** (displayed): anything — `My Later`
+4. **Username**: must be globally unique and end in `bot` — e.g. `alex_later_9f2bot`
+
+> **You'll know this worked when** BotFather replies *"Done! Congratulations on your new bot"* and shows a token shaped like `8123456789:AAF-abc...`.
+
+That token goes in `TELEGRAM_BOT_TOKEN`. **Don't paste it into our chat** — it is a full credential for the bot.
+
+---
+
+### Step 2 — Find your numeric chat ID
+
+Message **[@userinfobot](https://t.me/userinfobot)**. It replies immediately with your ID, a number like `123456789`.
+
+Put it in `TELEGRAM_ALLOWED_CHAT_IDS`.
+
+> **You'll know this worked when** you have a plain number, not an `@username`.
+
+**This is mandatory and Later refuses to start without it.** Your bot's username is discoverable by anyone — that is how Telegram works — so without an allowlist a stranger who finds it could add videos to your playlist.
+
+*(Once the webhook is live you can also send `/id` to your own bot, which does the same thing. @userinfobot avoids the chicken-and-egg.)*
+
+---
+
+### Step 3 — Generate a webhook secret
+
+```bash
+openssl rand -hex 32
+```
+
+Put it in `TELEGRAM_WEBHOOK_SECRET`. This is how Later proves an incoming update really came from Telegram.
+
+---
+
+### Step 4 — Register the webhook
+
+With all three values in your config and Later deployed and running:
+
+```bash
+curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
+  -H 'content-type: application/json' \
+  -d '{
+    "url": "https://YOUR-LATER-URL/telegram/webhook",
+    "secret_token": "<YOUR_WEBHOOK_SECRET>",
+    "allowed_updates": ["message", "callback_query"],
+    "drop_pending_updates": true
+  }'
+```
+
+> **You'll know this worked when** the response is exactly:
+> `{"ok":true,"result":true,"description":"Webhook was set"}`
+
+Then send your bot a message containing a YouTube link.
+
+> **You'll know the whole path works when** the bot replies **"Saved to Later"** within a second or two, and the video is in your playlist.
+
+If it stays silent, the one command worth running is:
+
+```bash
+curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getWebhookInfo"
+```
+
+`last_error_message` in that response tells you exactly what Telegram saw when it tried to reach you. Nothing else debugs this faster.
+
+---
+
+### Step 5 — The iOS Shortcut (needs a physical iPhone)
+
+Full instructions with exact action names: **[`clients/ios/README.md`](../clients/ios/README.md)**.
+
+**Use Route A — build it by hand.** It is five actions and about two minutes, and it needs no settings changes.
+
+Route B (importing the shipped `clients/ios/Later.plist`) exists, but iOS only imports shortcut files frictionlessly from an **iCloud link**, and iCloud links can only be created by a person tapping Share on a real device — so I cannot generate one for you. Importing a plain file requires enabling *Settings → Shortcuts → Allow Untrusted Shortcuts*. **The generated file has never been tested on a real device.** If you try it and it misbehaves, that is a bug in `scripts/build-ios-shortcut.py` and worth reporting.
+
+> **You'll know this worked when** sharing a TikTok from the TikTok app shows the "Sent to Later" notification straight away, and the video appears in your playlist. That is the ≤3-taps claim actually met.
+
+**If you'd like to publish a signed iCloud link** so other people can one-tap install it: long-press your shortcut → **Share** → **Copy iCloud Link**. Send me the link (it is not a secret) and I will put it in the README. Only you can create it.
+
+---
+
+### Step 6 — Android PWA (needs an Android phone)
+
+**[`clients/android/README.md`](../clients/android/README.md)** — open the deployed URL in Chrome, menu → **Add to Home screen** → **Install**.
+
+> **You'll know this worked when** Later appears in the Android share sheet from TikTok or Instagram.
+
+Requires HTTPS, which is another reason to deploy first. Icons are already served at `/icon-192.png` and `/icon-512.png`; without them Chrome would not offer to install at all.
+
+---
+
+### Batch 2 done — what to tell me
+
+1. **"Batch 2 done"**, plus which parts you did (Telegram / iOS / Android)
+2. The bot reply you got, or the `last_error_message` if it stayed silent
+3. Your iCloud shortcut link, if you made one
+4. Anything where the instructions didn't match what you saw
+
+**No tokens, no secrets.** The bot token and webhook secret are credentials; they belong in your config only.

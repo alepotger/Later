@@ -19,6 +19,7 @@ import { processOne } from '../pipeline/worker.ts';
 import type { Runtime } from '../runtime.ts';
 import { ingest, summariseItems } from '../services/ingest.ts';
 import { html } from './html.ts';
+import { ICON_192_PNG_BASE64, ICON_512_PNG_BASE64 } from './icons.ts';
 import {
   type AppBindings,
   rateLimit,
@@ -26,6 +27,7 @@ import {
   withRequestContext,
 } from './middleware.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
+import { registerTelegramRoutes } from './routes/telegram.ts';
 import { errorPage, homePage, setupPage, shareResultFlash } from './views.ts';
 
 const VALID_SOURCES: ItemSource[] = ['web', 'ios-shortcut', 'pwa', 'telegram', 'api'];
@@ -36,6 +38,7 @@ export function createApp(runtime: Runtime): Hono<AppBindings> {
   app.use('*', withRequestContext(runtime));
 
   registerAuthRoutes(app);
+  registerTelegramRoutes(app);
 
   // ─── Health ───────────────────────────────────────────────────────────────
   app.get('/healthz', (c) => c.json({ ok: true, mode: runtime.config.mode }));
@@ -53,7 +56,13 @@ export function createApp(runtime: Runtime): Hono<AppBindings> {
         display: 'standalone',
         background_color: '#fbfbfa',
         theme_color: '#1f5fbf',
-        icons: [],
+        icons: [
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          // A maskable copy, so Android can crop to its adaptive icon shape without
+          // clipping the mark.
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
         share_target: {
           action: '/share-target',
           method: 'GET',
@@ -65,6 +74,24 @@ export function createApp(runtime: Runtime): Hono<AppBindings> {
       { 'content-type': 'application/manifest+json' },
     ),
   );
+
+  // Icons are embedded in the bundle rather than served as static files, because the two
+  // deploy targets handle static assets differently. Without a >=192px icon Android will not
+  // offer "Add to Home screen", and without that there is no share target at all.
+  for (const [path, base64] of [
+    ['/icon-192.png', ICON_192_PNG_BASE64],
+    ['/icon-512.png', ICON_512_PNG_BASE64],
+  ] as const) {
+    app.get(path, (c) => {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      return c.body(bytes, 200, {
+        'content-type': 'image/png',
+        'cache-control': 'public, max-age=31536000, immutable',
+      });
+    });
+  }
 
   // ─── The ingest endpoint ──────────────────────────────────────────────────
   app.post(

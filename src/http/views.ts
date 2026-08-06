@@ -81,6 +81,8 @@ export function layout(options: {
 <meta name="robots" content="noindex,nofollow">
 <title>${options.title}</title>
 <link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <style>${STYLES}</style>
 </head>
 <body><div class="wrap">

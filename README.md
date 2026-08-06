@@ -26,9 +26,9 @@ If that's a dealbreaker, stop here — you'll save yourself 15 minutes.
 
 ## Status
 
-**Phase 1 code-complete — the product works.** Share a YouTube link and it lands in your playlist, deduplicated, with quota tracked and token expiry handled. 296 tests, none of which need credentials.
+**Phase 2 code-complete — the product works and has its phone clients.** Share a YouTube link and it lands in your playlist, deduplicated, with quota tracked and token expiry handled. iOS Shortcut, Android PWA share target, and a Telegram bot all hit the same endpoint. 385 tests, none of which need credentials.
 
-What is not built yet: the phone clients (Phase 2), resolving captions that only *describe* a video (Phase 3), and the one-click deploy (Phase 4). Start with [SETUP.md](SETUP.md).
+What is not built yet: resolving captions that only *describe* a video (Phase 3), and the one-click deploy (Phase 4). Start with [SETUP.md](SETUP.md).
 
 Later is being built in phases, and `main` is kept working at every phase boundary. See [PLAN.md](PLAN.md) for what's built and what's next.
 
@@ -36,8 +36,8 @@ Later is being built in phases, and `main` is kept working at every phase bounda
 |---|---|---|
 | 0 | Verified constraints, ADRs, console prerequisites | ✅ done |
 | 1 | The spine: share a YouTube link → it lands in the playlist | ✅ done |
-| 2 | iOS Shortcut, Android PWA share target, Telegram bot, notifications | 🔜 next |
-| 3 | Resolving videos that are *described* but not linked | ⬜ |
+| 2 | iOS Shortcut, Android PWA share target, Telegram bot, notifications | ✅ done |
+| 3 | Resolving videos that are *described* but not linked | 🔜 next |
 | 4 | Multi-user, one-click deploy, docs pass | ⬜ |
 
 ---
@@ -101,6 +101,7 @@ That runs the whole pipeline against recorded API responses, so you can see exac
 | | |
 |---|---|
 | [SETUP.md](SETUP.md) | Get it running |
+| [clients/](clients/) | Share sheet setup: [iOS](clients/ios/), [Android](clients/android/), [Telegram](clients/telegram/) |
 | [PLAN.md](PLAN.md) | Phase plan and current state |
 | [docs/ACTION-REQUIRED.md](docs/ACTION-REQUIRED.md) | Console steps only a human can do |
 | [docs/adr/](docs/adr/) | Every significant decision, and what would make me revisit it |
