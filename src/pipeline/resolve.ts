@@ -27,6 +27,9 @@ import type { Clock } from '../ports/clock.ts';
 import type { Logger } from '../ports/logger.ts';
 import type { Notifier } from '../ports/notifier.ts';
 import type { YouTubeClient, YouTubeVideo } from '../ports/youtube.ts';
+import type { LlmPort } from '../ports/llm.ts';
+import type { PlatformMetadataPort } from '../adapters/platform/oembed.ts';
+import { resolveHigherTiers } from './tiers.ts';
 import type { PlaylistService } from '../services/playlist.ts';
 import { ReauthRequiredError, type TokenService } from '../services/tokens.ts';
 
@@ -39,6 +42,8 @@ export interface ResolveDeps {
   youtube: YouTubeClient;
   playlists: PlaylistService;
   tokens: TokenService;
+  llm: LlmPort;
+  platform: PlatformMetadataPort;
 }
 
 export type ResolveOutcome =
@@ -91,18 +96,57 @@ export async function resolveItem(deps: ResolveDeps, itemId: string): Promise<Re
     }
   }
 
-  // ── Tiers 1-3 attach here (oEmbed, LLM, transcript). Phase 3. ──
-  // Until then, an item with no URL is honestly reported as unresolvable rather than
-  // guessed at, because a wrong video costs more trust than a missing right one.
+  // ── Tiers 1 and 2: platform captions, then language understanding ──
+  // Only reached when Tier 0 found nothing, so the free path is never taxed by this.
+  let confidence = item.confidence ?? 1;
 
   if (!videoId) {
-    await setStatus(deps, itemId, 'unresolvable', 'No YouTube video could be found in that share.');
-    await deps.notifier.send({
-      kind: 'item_failed',
-      reason: 'No YouTube video could be found in that share.',
-      sharedText: item.rawText.slice(0, 200),
-    });
-    return { kind: 'settled', status: 'unresolvable' };
+    let outcome: Awaited<ReturnType<typeof resolveHigherTiers>>;
+    try {
+      outcome = await resolveHigherTiers(deps, item.rawText);
+    } catch (error) {
+      // Quota exhaustion during `search.list` arrives here and must defer, not fail — the
+      // shared item is still perfectly good, we just cannot afford to resolve it today.
+      return await handleFailure(deps, itemId, null, tier, error);
+    }
+
+    if (outcome.kind === 'video') {
+      videoId = outcome.videoId;
+      tier = outcome.tier;
+      confidence = outcome.confidence;
+    } else if (outcome.kind === 'review') {
+      // Never add a guess we are not confident about. A wrong video in someone's playlist
+      // destroys trust faster than a missing right one.
+      await updateItem(
+        db,
+        itemId,
+        {
+          status: 'held_for_review',
+          resolvedVideoId: outcome.videoId,
+          resolvedTier: outcome.tier,
+          confidence: outcome.confidence,
+          failureReason: outcome.reason,
+        },
+        clock.now().getTime(),
+      );
+      await deps.notifier.send({
+        kind: 'item_held',
+        itemId,
+        guess: outcome.guess,
+        confidence: outcome.confidence,
+        reviewUrl: `${deps.config.publicBaseUrl}/review`,
+      });
+      log.info('held for review', { videoId: outcome.videoId, confidence: outcome.confidence });
+      return { kind: 'settled', status: 'held_for_review' };
+    } else {
+      await setStatus(deps, itemId, 'unresolvable', outcome.reason);
+      await deps.notifier.send({
+        kind: 'item_failed',
+        reason: outcome.reason,
+        sharedText: item.rawText.slice(0, 200),
+      });
+      return { kind: 'settled', status: 'unresolvable' };
+    }
   }
 
   try {
@@ -184,7 +228,13 @@ export async function resolveItem(deps: ResolveDeps, itemId: string): Promise<Re
     await updateItem(
       db,
       itemId,
-      { status: 'added', resolvedVideoId: videoId, resolvedTier: tier, failureReason: null },
+      {
+        status: 'added',
+        resolvedVideoId: videoId,
+        resolvedTier: tier,
+        confidence,
+        failureReason: null,
+      },
       clock.now().getTime(),
     );
 

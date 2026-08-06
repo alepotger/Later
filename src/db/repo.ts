@@ -437,6 +437,42 @@ export async function enqueueJob(
 }
 
 /**
+ * Put an item's job back on the queue, whether or not one already exists.
+ *
+ * Used when a held item is confirmed from the review inbox. Confirmation deliberately re-runs
+ * the normal pipeline rather than adding the video directly, so the dedupe claim and the quota
+ * gate still apply — a separate "the user said yes" path is how those guards get bypassed.
+ */
+export async function requeueItemJob(
+  db: Db,
+  input: { accountId: string; itemId: string },
+  now: number,
+): Promise<void> {
+  const updated = await db
+    .update(jobs)
+    .set({ status: 'pending', runAfter: now, attempts: 0, lastError: null, updatedAt: now })
+    .where(and(eq(jobs.itemId, input.itemId), eq(jobs.kind, 'resolve_item')))
+    .returning({ id: jobs.id });
+
+  if (updated.length > 0) return;
+
+  await db
+    .insert(jobs)
+    .values({
+      id: newId('job'),
+      kind: 'resolve_item',
+      accountId: input.accountId,
+      itemId: input.itemId,
+      status: 'pending',
+      attempts: 0,
+      runAfter: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing();
+}
+
+/**
  * Atomically claim one due job.
  *
  * A single conditional `UPDATE` because D1 has no interactive transactions. The apparently

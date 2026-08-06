@@ -101,12 +101,16 @@ export function rateLimit(
   return async (c: Context<AppBindings>, next: Next) => {
     const runtime = c.get('runtime');
     const limit = runtime.config.ingest.rateLimitPerMinute;
-    const windowStart = Math.floor(runtime.clock.now().getTime() / 60_000) * 60_000;
+    const now = runtime.clock.now().getTime();
+    const windowStart = Math.floor(now / 60_000) * 60_000;
 
     const count = await incrementRateLimit(runtime.db, bucketOf(c), windowStart);
     if (count > limit) {
       c.get('logger').warn('rate limited', { count, limit });
-      c.header('retry-after', String(Math.ceil((windowStart + 60_000 - Date.now()) / 1000)));
+      // Both sides of this must come from the injected clock. Mixing in `Date.now()` produced
+      // a negative retry-after whenever the two disagreed — invisible in production, and a
+      // latent bug the moment anything else drives the clock.
+      c.header('retry-after', String(Math.max(1, Math.ceil((windowStart + 60_000 - now) / 1000))));
       return c.json({ error: 'rate_limited', limit, windowSeconds: 60 }, 429);
     }
 

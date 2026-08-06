@@ -13,6 +13,9 @@ import {
   telegramNotifier,
 } from './adapters/notify/telegram.ts';
 import { fanout, webhookNotifier } from './adapters/notify/webhook.ts';
+import { geminiLlm, openAiCompatibleLlm } from './adapters/llm/providers.ts';
+import { createOEmbedClient, type PlatformMetadataPort } from './adapters/platform/oembed.ts';
+import { fixtureLlm, type LlmPort, noopLlm } from './ports/llm.ts';
 import {
   createFixtureYouTubeClient,
   type FixtureYouTubeClient,
@@ -75,6 +78,36 @@ export interface BuildRuntimeOptions {
    * exercised rather than simulated.
    */
   youtubeFor?: (accountId: string, quota: QuotaRecorder) => YouTubeClient;
+  /** Override Tier 2 in tests, so no key and no network are needed. */
+  llm?: LlmPort;
+  /** Override Tier 1 in tests. */
+  platform?: PlatformMetadataPort;
+}
+
+/** Pick the Tier 2 provider from config. See docs/adr/0009. */
+function buildLlm(config: Config, logger: Logger, fetchImpl?: typeof fetch): LlmPort {
+  const deps = { logger, ...(fetchImpl ? { fetch: fetchImpl } : {}) };
+  switch (config.llm.provider) {
+    case 'gemini':
+      return config.llm.geminiApiKey
+        ? geminiLlm({ apiKey: config.llm.geminiApiKey, model: config.llm.model }, deps)
+        : noopLlm;
+    case 'openai-compatible':
+      return config.llm.openaiBaseUrl
+        ? openAiCompatibleLlm(
+            {
+              baseUrl: config.llm.openaiBaseUrl,
+              apiKey: config.llm.openaiApiKey,
+              model: config.llm.model,
+            },
+            deps,
+          )
+        : noopLlm;
+    case 'fixture':
+      return fixtureLlm();
+    default:
+      return noopLlm;
+  }
 }
 
 /**
@@ -151,6 +184,16 @@ export async function buildRuntime(options: BuildRuntimeOptions): Promise<Runtim
     });
   });
 
+  // Tier 2 provider. `none` is the default and the product works fully without it.
+  const llm: LlmPort = options.llm ?? buildLlm(config, baseLogger, options.fetch);
+  const platform: PlatformMetadataPort =
+    options.platform ??
+    createOEmbedClient({
+      logger: baseLogger,
+      instagramToken: config.resolve.instagramOembedToken,
+      ...(options.fetch ? { fetch: options.fetch } : {}),
+    });
+
   const vault = await createVault(config.secrets.tokenEncryptionKey);
 
   const tokens = createTokenService({
@@ -179,7 +222,19 @@ export async function buildRuntime(options: BuildRuntimeOptions): Promise<Runtim
 
     const playlists = createPlaylistService({ db, config, clock, logger, youtube });
 
-    return { db, config, clock, logger, notifier, youtube, quota, playlists, tokens };
+    return {
+      db,
+      config,
+      clock,
+      logger,
+      notifier,
+      youtube,
+      quota,
+      playlists,
+      tokens,
+      llm,
+      platform,
+    };
   }
 
   const runtime: Runtime = {

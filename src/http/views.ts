@@ -7,7 +7,7 @@
  */
 
 import type { Config } from '../config.ts';
-import type { Item, ItemStatus } from '../db/schema.ts';
+import type { Item, ItemStatus, VideoCacheRow } from '../db/schema.ts';
 import { playlistUrl } from '../services/playlist.ts';
 import type { QuotaSummary } from '../services/quota.ts';
 import { type Html, html, when } from './html.ts';
@@ -319,4 +319,70 @@ export function errorPage(config: Config, title: string, detail: string): string
       <div class="row"><a href="/"><button class="secondary">Back</button></a></div>
     </div>`,
   });
+}
+
+/**
+ * The review inbox.
+ *
+ * Everything here is a video Later resolved but was not confident enough to add. Each row
+ * shows what was shared, what Later thinks it is, and how sure it was — so the decision is
+ * informed rather than a blind yes/no.
+ */
+export function reviewPage(options: {
+  config: Config;
+  items: Item[];
+  videos: Map<string, VideoCacheRow>;
+}): string {
+  const body = html`
+    <p class="sub">
+      Videos Later resolved but was not confident enough to add on its own. One tap each.
+    </p>
+
+    ${
+      options.items.length === 0
+        ? html`<div class="card">
+            <p style="margin:0">
+              Nothing waiting. Later only holds something back when it is unsure — most shares
+              never land here.
+            </p>
+            <div class="row"><a href="/"><button class="secondary">Back</button></a></div>
+          </div>`
+        : html`${options.items.map((item) => reviewRow(item, options.videos))}`
+    }
+  `;
+  return layout({ title: 'Later — review', body, config: options.config });
+}
+
+function reviewRow(item: Item, videos: Map<string, VideoCacheRow>): Html {
+  const video = item.resolvedVideoId ? videos.get(item.resolvedVideoId) : undefined;
+  const percent = Math.round((item.confidence ?? 0) * 100);
+
+  return html`<div class="card">
+    <div class="item-meta" style="margin-bottom:.4rem">You shared</div>
+    <div style="margin-bottom:.9rem">${item.rawText.slice(0, 240)}</div>
+
+    <div class="item-meta" style="margin-bottom:.4rem">Later thinks this is</div>
+    <div class="item-title">
+      ${
+        item.resolvedVideoId
+          ? html`<a href="https://www.youtube.com/watch?v=${item.resolvedVideoId}"
+              >${video?.title || item.resolvedVideoId}</a
+            >`
+          : 'nothing it could identify'
+      }
+    </div>
+    ${when(video?.channelTitle, () => html`<div class="item-meta">${video?.channelTitle}</div>`)}
+
+    <div class="meter" style="margin-top:.7rem"><span style="width:${percent}%"></span></div>
+    <div class="item-meta">${percent}% confident &middot; ${item.failureReason ?? ''}</div>
+
+    <div class="row">
+      <form method="post" action="/review/${item.id}/confirm">
+        <button type="submit">Add it</button>
+      </form>
+      <form method="post" action="/review/${item.id}/reject">
+        <button type="submit" class="secondary">Skip</button>
+      </form>
+    </div>
+  </div>`;
 }

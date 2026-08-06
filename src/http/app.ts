@@ -27,6 +27,7 @@ import {
   withRequestContext,
 } from './middleware.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
+import { registerReviewRoutes } from './routes/review.ts';
 import { registerTelegramRoutes } from './routes/telegram.ts';
 import { errorPage, homePage, setupPage, shareResultFlash } from './views.ts';
 
@@ -39,6 +40,7 @@ export function createApp(runtime: Runtime): Hono<AppBindings> {
 
   registerAuthRoutes(app);
   registerTelegramRoutes(app);
+  registerReviewRoutes(app);
 
   // ─── Health ───────────────────────────────────────────────────────────────
   app.get('/healthz', (c) => c.json({ ok: true, mode: runtime.config.mode }));
@@ -210,11 +212,16 @@ export function createApp(runtime: Runtime): Hono<AppBindings> {
     const settled = await listItemsByShareKey(runtime.db, result.shareKey);
     const summary = summariseItems(settled);
 
+    // The paste box waited for the pipeline, so it knows the *final* reason. `result.rejection`
+    // is the optimistic ingest-time note ("reading the text to work out which video it means"),
+    // which would be stale and misleading by the time this renders.
+    const settledReason = settled.find((item) => item.failureReason)?.failureReason ?? null;
+
     return c.html(
       await renderHome(runtime, account, {
         flash: shareResultFlash({
           ...summary,
-          rejection: result.rejection,
+          rejection: settledReason ?? result.rejection,
           // Idempotency matched everything, so this is a re-share rather than a new save.
           alreadyAccepted: result.items.every((item) => !item.created),
         }),

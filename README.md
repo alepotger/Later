@@ -26,9 +26,9 @@ If that's a dealbreaker, stop here — you'll save yourself 15 minutes.
 
 ## Status
 
-**Phase 2 code-complete — the product works and has its phone clients.** Share a YouTube link and it lands in your playlist, deduplicated, with quota tracked and token expiry handled. iOS Shortcut, Android PWA share target, and a Telegram bot all hit the same endpoint. 385 tests, none of which need credentials.
+**Phase 3 code-complete.** Share a YouTube link and it lands in your playlist, deduplicated, with quota tracked and token expiry handled. iOS Shortcut, Android PWA share target, and a Telegram bot all hit the same endpoint. A Reel whose caption only *describes* a video is resolved through oEmbed and an optional LLM — or honestly held for one-tap review when Later is not sure. 454 tests, none of which need credentials.
 
-What is not built yet: resolving captions that only *describe* a video (Phase 3), and the one-click deploy (Phase 4). Start with [SETUP.md](SETUP.md).
+What is not built yet: multi-user mode and the one-click deploy (Phase 4). Start with [SETUP.md](SETUP.md).
 
 Later is being built in phases, and `main` is kept working at every phase boundary. See [PLAN.md](PLAN.md) for what's built and what's next.
 
@@ -37,12 +37,12 @@ Later is being built in phases, and `main` is kept working at every phase bounda
 | 0 | Verified constraints, ADRs, console prerequisites | ✅ done |
 | 1 | The spine: share a YouTube link → it lands in the playlist | ✅ done |
 | 2 | iOS Shortcut, Android PWA share target, Telegram bot, notifications | ✅ done |
-| 3 | Resolving videos that are *described* but not linked | 🔜 next |
-| 4 | Multi-user, one-click deploy, docs pass | ⬜ |
+| 3 | Resolving videos that are *described* but not linked | ✅ done |
+| 4 | Multi-user, one-click deploy, docs pass | 🔜 next |
 
 ---
 
-## How it will work
+## How it works
 
 ```
 share sheet ──┐

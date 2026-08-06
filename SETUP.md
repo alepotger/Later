@@ -169,7 +169,7 @@ Being straight about this so you know what you're getting:
 | Token expiry detection and re-auth | ✅ works |
 | iOS Shortcut · Android PWA · Telegram bot | ✅ built (needs a reachable URL) |
 | Notifications (Telegram / webhook) | ✅ works |
-| Resolving a caption that *describes* a video | ⬜ Phase 3 |
+| Resolving a caption that *describes* a video | ✅ works (needs an LLM key for Tier 2) |
 | One-click deploy · `docker compose up` | ⬜ Phase 4 |
 
 Current state is always in [PLAN.md](PLAN.md).

@@ -26,6 +26,8 @@ import { fixedClock } from '../../src/ports/clock.ts';
 import { silentLogger } from '../../src/ports/logger.ts';
 import type { Notification } from '../../src/ports/notifier.ts';
 import { recordingNotifier } from '../../src/ports/notifier.ts';
+import type { LlmPort } from '../../src/ports/llm.ts';
+import type { PlatformMetadataPort } from '../../src/adapters/platform/oembed.ts';
 import type { QuotaRecorder } from '../../src/ports/youtube.ts';
 import { buildRuntime, type Runtime } from '../../src/runtime.ts';
 
@@ -108,6 +110,10 @@ export interface HarnessOptions {
   notifier?: null;
   /** Stub outbound HTTP (Telegram, Google token endpoint). The YouTube client is separate. */
   fetch?: typeof fetch;
+  /** Tier 2 provider. Omit for `none`, which is the production default. */
+  llm?: LlmPort;
+  /** Tier 1 platform metadata (oEmbed). */
+  platform?: PlatformMetadataPort;
 }
 
 export async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
@@ -152,6 +158,8 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
     // `notifier: null` means "use the channels config asks for", so the real adapters run.
     ...(options.notifier === null ? {} : { notifier }),
     ...(options.fetch ? { fetch: options.fetch } : {}),
+    ...(options.llm ? { llm: options.llm } : {}),
+    ...(options.platform ? { platform: options.platform } : {}),
     youtubeFor: (_accountId, quota) => {
       currentQuota = quota;
       return youtube;

@@ -406,3 +406,76 @@ Requires HTTPS, which is another reason to deploy first. Icons are already serve
 4. Anything where the instructions didn't match what you saw
 
 **No tokens, no secrets.** The bot token and webhook secret are credentials; they belong in your config only.
+
+---
+
+## Batch 3 — Gemini API key (optional)
+
+**Logged:** 2026-08-06 · **Needed before:** Tier 2 can resolve a caption that only *describes* a video
+**Estimated time:** ~3 minutes · **Waiting periods:** none · **Cost:** free, no card
+**Blocks me?** No. Phase 3 is complete and tested against a fixture provider.
+
+### Skip this if you like
+
+Tiers 0 and 1 need no key and handle the majority of real shares:
+
+- **Tier 0** — a YouTube link anywhere in the shared text. Free, exact, instant.
+- **Tier 1** — a TikTok or Instagram caption containing a YouTube link, read via public oEmbed. Also free.
+
+Tier 2 only matters for the case where a caption *describes* a video without linking it — *"that Veritasium one about why planes fly"*. Without a key, those land honestly as "no YouTube link found" rather than being guessed at.
+
+**Cost warning worth knowing before you enable it:** each Tier 2 resolution spends **151 units** of your 10,000/day YouTube quota, versus 51 for a share with a link. That is roughly 65 searched shares a day instead of 190. Later spends at most one `search.list` per item regardless of how many candidates the model returns.
+
+### Step 1 — Get a key
+
+The quickest route:
+
+1. Go to **https://aistudio.google.com/apikey**
+2. Click **"Create API key"**
+3. Choose **"Create API key in existing project"** and pick the **`later`** project from Batch 1
+
+> **You'll know this worked when** you see a key starting with `AIza...`.
+
+Using the same project is the convergence noted in the README: the Gemini API and YouTube Data API v3 live side by side in one Google Cloud project. **That is the only thing they share** — Gemini cannot grant, proxy, or substitute for YouTube access, which needs the OAuth you set up in Batch 1.
+
+*(Alternative, same result: enable the **Generative Language API** at https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com with `later` selected, then create the key under **Credentials**.)*
+
+### Step 2 — Configure
+
+```dotenv
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=AIza...
+# Optional. Defaults to gemini-2.5-flash, which is on the free tier.
+LLM_MODEL=gemini-2.5-flash
+```
+
+Later refuses to start with `LLM_PROVIDER=gemini` and no key, rather than silently disabling Tier 2.
+
+### Step 3 — Try it
+
+Share something that describes a video without linking it — *"that Veritasium video about why planes fly"*.
+
+> **You'll know this worked when** either the video is saved with **tier 2** recorded against it, or it appears at `/review` with a confidence score and an **Add it** button.
+
+**Both are correct outcomes.** Later only auto-adds above `RESOLVE_CONFIDENCE_THRESHOLD` (default `0.75`); anything less waits for one tap. A wrong video in your playlist costs more trust than a missing right one, so the bias is deliberately towards asking.
+
+If too much lands in review, lower the threshold. If anything wrong gets added, raise it toward `0.85`–`0.9`. Setting it to `1.0` effectively means "only trust real URLs", which is a legitimate way to run.
+
+### Not using Gemini?
+
+Anything speaking the OpenAI chat-completions shape works, including a local model:
+
+```dotenv
+LLM_PROVIDER=openai-compatible
+OPENAI_BASE_URL=http://localhost:11434/v1   # Ollama
+OPENAI_API_KEY=                              # local runtimes need none
+LLM_MODEL=llama3.2
+```
+
+### Batch 3 done — what to tell me
+
+1. **"Batch 3 done"**, or "skipping Tier 2"
+2. Whether a described-but-unlinked share resolved, went to review, or was declined
+3. If it resolved the *wrong* video, the caption you shared and what it picked — that is a ranking bug and the fixtures for it live in `tests/core/ranking.test.ts`
+
+**No keys in chat.** `GEMINI_API_KEY` is a credential.
