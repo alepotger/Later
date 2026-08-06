@@ -2,7 +2,7 @@
 
 Living document. Updated at every phase boundary and whenever a decision changes.
 
-**Current state: Phase 4 code-complete. Every phase in the plan is built. 494 tests, all green, none needing credentials.**
+**Current state: Phase 4 code-complete. Every phase in the plan is built. 495 tests, all green, none needing credentials.**
 
 Four things are written and tested but not yet verified against reality, all for the same reason — this build environment has no credentials, no phone, no Docker daemon, and no route to `api.telegram.org`:
 
@@ -11,7 +11,7 @@ Four things are written and tested but not yet verified against reality, all for
 | The live Google OAuth round-trip | Batch 1 (done) + one local run by the owner |
 | Telegram ingress and notifications | Batch 2, and a public HTTPS URL |
 | iOS Shortcut / Android PWA | Batch 2, and a physical phone |
-| The Docker image build | a Docker daemon — CI now builds it, starts it, and shares a video through it |
+| ~~The Docker image build~~ | done by CI, not by me — [run 31132160426](https://github.com/alepotger/Later/actions/runs/31132160426) builds the image, starts it, and shares a video through it on every commit |
 
 **A sequencing correction:** the phone clients cannot reach `localhost`, and Telegram *pushes* to a webhook, so **Batch 4 (deploy) should be done before Batch 2**, inverting the phase numbering. This is stated at the top of Batch 2 rather than left to be discovered.
 
@@ -191,7 +191,7 @@ Three guards on top of the threshold, each with a test:
 | ✅ 4.1 | MULTI: ingest auth resolves an account instead of comparing one value | 17 end-to-end tests, incl. cross-account isolation |
 | ✅ 4.2 | Per-account ingest tokens — minted in the UI, stored only as a SHA-256 hash | minted over real HTTP, used, and confirmed unreadable afterwards |
 | ✅ 4.3 | Stateless signed web sessions and Telegram link codes | 18 unit tests, all about the ways verification must say no |
-| ✅ 4.4 | `Dockerfile` + `docker-compose.yml`, with a credential-free demo profile | the runtime layout was reproduced and run locally; the **image build is CI-only** |
+| ✅ 4.4 | `Dockerfile` + `docker-compose.yml`, with a credential-free demo profile | CI builds the image, starts it, and shares a video through it — green on the first run |
 | ✅ 4.5 | "Deploy to Cloudflare" button and [DEPLOY.md](DEPLOY.md) covering both targets | button URL and `wrangler.jsonc` resource declaration; **never clicked** |
 | ✅ 4.6 | Batch 4 handoff, with a recommendation at each decision | in `ACTION-REQUIRED.md` |
 | ✅ 4.7 | Quota-increase instructions, with honest expectations | in `TROUBLESHOOTING.md` |
@@ -207,7 +207,7 @@ Three guards on top of the threshold, each with a test:
 
 **One bug this phase's tests caught:** the Telegram permit check was written as two negations and inverted, so in MULTI a correctly *linked* chat was rejected while an unlinked one got through. It was caught by the test asserting a linked chat can share, not by reading the code.
 
-**Two things this phase deliberately did not do:** neither the Docker image nor the deploy button has been exercised in this environment — there is no Docker daemon and no Cloudflare account. Rather than claim otherwise, CI now builds the image, starts the container, and pushes a share through it on every commit, and the deploy button is Batch 4's first step.
+**What this phase could not do here, and what was done instead.** This environment has no Docker daemon and no Cloudflare account. The Docker gap is now closed by CI, which builds the image, starts the container and pushes a share through it on every commit — green on its first run. The deploy button remains genuinely unexercised; it is Batch 4 step A2 and needs a person with a Cloudflare account.
 
 ---
 
@@ -253,7 +253,7 @@ Tracked against §11 of the brief. Nothing here is checked until it has actually
 - [x] Token expiry produces a notification and a working one-tap re-auth — not silence *(verified against a stubbed token endpoint; the live round-trip awaits Batch 1)*
 - [x] Quota exhaustion queues and retries — never drops, and does not consume a retry attempt
 - [x] README states the Watch Later limitation plainly, above the fold
-- [x] `docker compose up` works from a clean checkout with only `.env` filled in *(the image build itself is verified by CI, not by me — this environment has no Docker daemon. The exact runtime layout the image ships, production-only `node_modules` plus the bundle plus `drizzle/`, was reproduced and run locally end to end.)*
+- [x] `docker compose up` works from a clean checkout with only `.env` filled in *(the image is built, started and driven by CI on every commit — not by me; this environment has no Docker daemon. `docker compose` itself layers only env, ports and a volume on top of that image.)*
 - [x] Zero secrets in git history
-- [x] CI green — lint, typecheck, 494 tests, migration-drift check, both deploy targets bundled, the Docker image built and driven, full-history secret scan
+- [x] CI green — [run 31132160426](https://github.com/alepotger/Later/actions/runs/31132160426): lint, typecheck, 495 tests, migration-drift check, both deploy targets bundled, the Docker image built and driven, full-history secret scan
 - [x] `ACTION-REQUIRED.md` complete and ordered for the current phase, with nothing guessed

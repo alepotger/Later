@@ -26,7 +26,7 @@ If that's a dealbreaker, stop here — you'll save yourself 15 minutes.
 
 ## Status
 
-**Phase 4 code-complete.** Share a YouTube link and it lands in your playlist, deduplicated, with quota tracked and token expiry handled. iOS Shortcut, Android PWA share target, and a Telegram bot all hit the same endpoint. A Reel whose caption only *describes* a video is resolved through oEmbed and an optional LLM — or honestly held for one-tap review when Later is not sure. Deploy it with one button or one `docker compose up`, for yourself or for a household. 494 tests, none of which need credentials.
+**Phase 4 code-complete.** Share a YouTube link and it lands in your playlist, deduplicated, with quota tracked and token expiry handled. iOS Shortcut, Android PWA share target, and a Telegram bot all hit the same endpoint. A Reel whose caption only *describes* a video is resolved through oEmbed and an optional LLM — or honestly held for one-tap review when Later is not sure. Deploy it with one button or one `docker compose up`, for yourself or for a household. 495 tests, none of which need credentials.
 
 Start with [SETUP.md](SETUP.md) to run it locally, or [DEPLOY.md](DEPLOY.md) to put it somewhere your phone can reach.
 

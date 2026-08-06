@@ -226,6 +226,30 @@ describe('MULTI web session', () => {
     expect(reloaded).not.toContain(token);
   });
 
+  it('issues a working session when an account connects', async () => {
+    // Fixtures mode short-circuits the Google round-trip but goes through the same
+    // `issueSessionCookie`, so this covers the one thing a real callback cannot be tested for
+    // here: that the browser is actually signed in when it lands back on the site.
+    const harness = await createHarness({
+      config: {
+        mode: 'MULTI',
+        allowedEmails: ['you@example.com (fixtures mode)'],
+        useFixtures: true,
+      },
+      connect: false,
+    });
+
+    const response = await harness.request('/auth/start');
+    const setCookie = response.headers.get('set-cookie') ?? '';
+    expect(setCookie).toMatch(/^later_session=/);
+    expect(setCookie).toContain('HttpOnly');
+
+    const cookie = setCookie.split(';')[0] as string;
+    const home = await (await harness.request('/', { headers: { cookie } })).text();
+    expect(home).toContain('you@example.com (fixtures mode)');
+    expect(home).not.toContain('Continue with Google');
+  });
+
   it('signs out by clearing the cookie', async () => {
     const harness = await multiHarness();
     const response = await harness.request('/auth/signout', {

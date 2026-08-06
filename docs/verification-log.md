@@ -113,11 +113,11 @@ Kept current so nobody has to reverse-engineer it from phase notes. Everything h
 | Telegram ingress and notifications reach real Telegram | `api.telegram.org` is blocked by the egress policy | Batch 2, on a deployed instance |
 | The iOS Shortcut `.plist` imports on a device | no iPhone; Apple only allows frictionless import from an iCloud link, which needs a device | Batch 2 |
 | The Android PWA appears in the share sheet | no Android device, and `share_target` needs HTTPS | Batch 2 |
-| The Docker image builds and runs | **no Docker daemon in this environment** — the build was never executed | CI now runs `docker build`, starts the container, and pushes a share through it on every commit; a green `Docker image builds and runs` job is the verification |
+| ~~The Docker image builds and runs~~ | **VERIFIED, but not by me** — this environment has no Docker daemon | CI [run 31132160426](https://github.com/alepotger/Later/actions/runs/31132160426) built the image, started the container, got `{"ok":true}` from `/healthz`, and resolved a share through `/api/ingest`. Re-verified on every commit. |
 | The "Deploy to Cloudflare" button provisions D1 and deploys | no Cloudflare account | Batch 4 step A2 |
 | Instagram oEmbed works without a token (see above) | medium-confidence, from third-party write-ups | one live call against a public Reel |
 
-**What *was* verified locally for the Docker path**, since the image itself could not be: the exact layout the runtime stage ships — a production-only pnpm `node_modules`, the esbuild bundle, and `drizzle/` — was reproduced in a scratch directory and started with `node dist/later.js`. It migrated, listened, served `/healthz`, and answered `/api/ingest`. What that does *not* prove is anything about the Dockerfile itself: base image, layer copying, the pnpm symlink tree surviving `COPY --from`, or the native SQLite binding compiling on the build platform. Those are exactly what the CI job exists to catch.
+**What was verified locally for the Docker path** before CI could run it: the exact layout the runtime stage ships — a production-only pnpm `node_modules`, the esbuild bundle, and `drizzle/` — was reproduced in a scratch directory and started with `node dist/later.js`. It migrated, listened, served `/healthz`, and answered `/api/ingest`. What that does *not* prove is anything about the Dockerfile itself: base image, layer copying, the pnpm symlink tree surviving `COPY --from`, or the native SQLite binding compiling on the build platform. Those are exactly what the CI job catches, and on its first run it caught nothing — the image built and served on the first attempt.
 
 ## Incidental finding — the Node server's default port
 
