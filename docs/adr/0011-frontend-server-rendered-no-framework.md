@@ -1,6 +1,6 @@
-# ADR-0011 — Server-rendered JSX, no client framework
+# ADR-0011 — Server-rendered HTML templates, no client framework
 
-**Status:** accepted · **Date:** 2026-08-05
+**Status:** accepted · **Date:** 2026-08-05 · **Revised:** 2026-08-06 during Phase 1 (JSX → tagged template; see "Revision" at the end)
 
 ## Context
 
@@ -16,9 +16,9 @@ That is four pages and roughly a dozen interactions. There is no realtime, no co
 
 ## Decision
 
-**Hono's server-rendered JSX. Plain CSS in one file. Small amounts of vanilla JS where it earns its place. No build step for the frontend, no React, no client-side router.**
+**A ~40-line auto-escaping `html` tagged template, rendered on the server. Plain CSS in one file. Small amounts of vanilla JS where it earns its place. No build step for the frontend, no React, no client-side router.**
 
-- **JSX on the server** — component decomposition and type-checked templates, compiled by the same `tsc`/esbuild pass as everything else, rendering to a string. No hydration, no client bundle.
+- **An `html` tagged template that escapes every interpolation by default.** Composition is ordinary function calls returning `Html` values; nesting is just interpolating one into another. Emitting raw markup requires an explicit `raw()`, so the unsafe path is the one you have to type out on purpose.
 - **Forms post and redirect.** Confirm/reject in the review inbox are `<form method="post">` submissions. They work without JavaScript, which means they work in the odd in-app browser contexts that share sheets produce — which is exactly where this UI will actually be used.
 - **Progressive enhancement only.** The PWA share-target page needs ~20 lines of inline JS to fire the ingest and show a result. The paste box gets a fetch-based submit so it doesn't navigate. Both work without JS, just less prettily.
 - **One CSS file**, system font stack, respects `prefers-color-scheme`. No framework, no preprocessor, no utility classes.
@@ -34,7 +34,9 @@ On the share target specifically: the manifest uses **`method: "GET"`** so the A
 
 **Svelte / Vue / SolidStart.** All lighter than React and all still a build pipeline and a client runtime for four pages.
 
-**A template language** (Nunjucks, Handlebars, EJS). Would work. JSX is already type-checked by the compiler we're running and needs no extra dependency or editor support, so it wins on integration rather than on merit.
+**A template language** (Nunjucks, Handlebars, EJS). Would work, and is a dependency plus a second syntax to learn for four pages.
+
+**JSX** (Hono's `hono/jsx`). This was the original decision here, and it was revised during implementation — see below.
 
 **API-only, no web UI.** Considered, since the product's whole thesis is that the user never opens the web app. Rejected on three counts: the paste box is the fallback ingress for every platform and the primary debugging tool; the review inbox has to live somewhere; and the `reauth_required` banner is the safety net when no notification channel is configured. The UI is rarely visited and load-bearing when it is.
 
@@ -58,3 +60,21 @@ Bad, and accepted:
 - **The review inbox becomes a place people spend time**, e.g. Tier 2/3 push a lot of items into it and users triage in batches. Then HTMX for partial updates, still without a build step.
 - **A feature genuinely needs client state** — offline queueing in the PWA is the plausible one.
 - **The GET share target's extra browser tab proves annoying** in real use. Then the `POST`+service-worker variant, which is a contained change to the manifest and one new file.
+
+## Revision, 2026-08-06 — JSX replaced by a tagged template
+
+The original decision was Hono's server-rendered JSX. Wiring it up in Phase 1 showed the "no build step" claim in this ADR was not actually true of JSX: it needs a `jsx`/`jsxImportSource` pair configured in **three** places that each resolve it differently — `tsconfig.json` for typechecking, the test runner's transform, and the bundler for each of the two deploy targets. Vitest 4 moved from esbuild to oxc mid-stack, which surfaced this as a real configuration conflict rather than a theoretical cost.
+
+Weighed against what JSX was buying — composition and type-checked templates for four pages — that is a poor trade. A tagged template gets both properties with **zero** transform configuration:
+
+```ts
+const page = html`<main><h1>${title}</h1>${rows.map(row)}</main>`;
+```
+
+Composition is function calls, values are typed, and every interpolation is escaped unless explicitly wrapped in `raw()`. It is plain TypeScript, so all three toolchains parse it with no configuration at all.
+
+Two things genuinely got better, not just simpler. Escaping is now **on by default and off by exception**, which is the safer polarity — JSX's `dangerouslySetInnerHTML` is a louder name but the same hazard, and here the hazard is user-supplied caption text rendered back into the review inbox. And the frontend now shares the "Web-standard APIs only" property of the rest of the codebase ([ADR-0001](0001-typescript-hono-web-standard-runtime.md)) rather than depending on a compiler feature.
+
+What got worse: no structural validation of the markup. A malformed tag is a runtime bug a JSX compiler would have caught. Mitigated by the templates being small and by rendering tests asserting on output, but it is a real loss and worth naming.
+
+**Everything else in this ADR stands** — server-rendered, no client framework, forms that work without JavaScript, one CSS file. Only the templating mechanism changed. Revisit alongside the triggers above.

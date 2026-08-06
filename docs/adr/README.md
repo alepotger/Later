@@ -16,7 +16,7 @@ Format is deliberately short. These are working notes for whoever inherits this,
 | [0008](0008-ingest-authentication.md) | Bearer token ingest auth, not HMAC | accepted |
 | [0009](0009-llm-provider-and-the-gemini-question.md) | Gemini default behind an interface, always optional | accepted |
 | [0010](0010-notifications-telegram-primary.md) | Telegram as primary notification channel | accepted |
-| [0011](0011-frontend-server-rendered-no-framework.md) | Server-rendered JSX, no client framework | accepted |
+| [0011](0011-frontend-server-rendered-no-framework.md) | Server-rendered HTML templates, no client framework | accepted (revised) |
 | [0012](0012-tooling-pnpm-vitest-biome.md) | pnpm, Vitest, Biome, gitleaks, GitHub Actions | accepted |
 | [0013](0013-solo-and-multi-modes.md) | SOLO default, MULTI opt-in | accepted |
 

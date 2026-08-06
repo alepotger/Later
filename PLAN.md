@@ -73,7 +73,7 @@ Every significant choice is an ADR in [`docs/adr/`](docs/adr/), each recording w
 | [0008](docs/adr/0008-ingest-authentication.md) | Bearer token ingest auth (not HMAC) + rate limiting |
 | [0009](docs/adr/0009-llm-provider-and-the-gemini-question.md) | Gemini default behind an interface, always optional |
 | [0010](docs/adr/0010-notifications-telegram-primary.md) | Telegram as primary notification channel |
-| [0011](docs/adr/0011-frontend-server-rendered-no-framework.md) | Server-rendered JSX, no client framework |
+| [0011](docs/adr/0011-frontend-server-rendered-no-framework.md) | Server-rendered HTML templates, no client framework |
 | [0012](docs/adr/0012-tooling-pnpm-vitest-biome.md) | pnpm, Vitest, Biome, gitleaks, GitHub Actions |
 | [0013](docs/adr/0013-solo-and-multi-modes.md) | SOLO default, MULTI opt-in |
 

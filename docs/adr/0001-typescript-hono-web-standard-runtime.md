@@ -20,7 +20,7 @@ Concretely, the code is only allowed to assume these platform primitives:
 
 All of those exist unchanged in Node 20+, Cloudflare Workers, Deno, and Bun. Anything outside that set — a filesystem, a process, a SQLite driver, a timer that survives a response — is reached only through an injected port.
 
-Hono is the HTTP layer because it is built on `Request`/`Response` rather than wrapping a Node-specific server, so the same router runs on both targets with a different entry file and nothing else changed. It also brings server-rendered JSX (see [ADR-0011](0011-frontend-server-rendered-no-framework.md)), which removes the need for a separate frontend stack.
+Hono is the HTTP layer because it is built on `Request`/`Response` rather than wrapping a Node-specific server, so the same router runs on both targets with a different entry file and nothing else changed. The web UI is rendered by a small auto-escaping template helper rather than a frontend stack (see [ADR-0011](0011-frontend-server-rendered-no-framework.md)).
 
 ## Rejected
 
