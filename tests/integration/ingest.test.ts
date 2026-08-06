@@ -7,6 +7,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { listItemsByShareKey, listPlaylistEntries, listRecentItems } from '../../src/db/repo.ts';
+import { hmacSha256Hex } from '../../src/crypto/vault.ts';
 import { createHarness, type Harness, INGEST_TOKEN } from '../helpers/harness.ts';
 
 const VIDEO = 'dQw4w9WgXcQ';
@@ -414,5 +415,74 @@ describe('not connected yet', () => {
     const body = await response.text();
     expect(body).toContain('Not connected yet');
     expect(body).toContain('/auth/start');
+  });
+});
+
+describe('optional HMAC signing (opt-in hardening)', () => {
+  const HMAC_SECRET = 'hmac-secret-for-tests-only-32-chars';
+
+  async function signedHarness(): Promise<Harness> {
+    harness = await createHarness({
+      config: {
+        ingest: { token: INGEST_TOKEN, hmacSecret: HMAC_SECRET, rateLimitPerMinute: 100 },
+      },
+    });
+    return harness;
+  }
+
+  async function send(h: Harness, body: string, signature: string | null): Promise<Response> {
+    return await h.request('/api/ingest', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${INGEST_TOKEN}`,
+        'content-type': 'application/json',
+        ...(signature === null ? {} : { 'x-later-signature': signature }),
+      },
+      body,
+    });
+  }
+
+  it('accepts a correctly signed request', async () => {
+    const h = await signedHarness();
+    const body = JSON.stringify({ text: `https://youtu.be/${VIDEO}` });
+    const signature = await hmacSha256Hex(HMAC_SECRET, body);
+
+    expect((await send(h, body, signature)).status).toBe(202);
+    await h.drain();
+    expect([...h.youtube.playlistContents.values()].flat()).toEqual([VIDEO]);
+  });
+
+  it('rejects a request with no signature, even with a valid bearer token', async () => {
+    const h = await signedHarness();
+    const body = JSON.stringify({ text: `https://youtu.be/${VIDEO}` });
+    expect((await send(h, body, null)).status).toBe(401);
+  });
+
+  it('rejects a signature computed over different content — tamper detection', async () => {
+    const h = await signedHarness();
+    const signature = await hmacSha256Hex(HMAC_SECRET, JSON.stringify({ text: 'something else' }));
+    const body = JSON.stringify({ text: `https://youtu.be/${VIDEO}` });
+    expect((await send(h, body, signature)).status).toBe(401);
+  });
+
+  it('rejects a signature made with the wrong secret', async () => {
+    const h = await signedHarness();
+    const body = JSON.stringify({ text: `https://youtu.be/${VIDEO}` });
+    const signature = await hmacSha256Hex('a-different-secret', body);
+    expect((await send(h, body, signature)).status).toBe(401);
+  });
+
+  it('accepts an upper-case hex signature, since clients differ', async () => {
+    const h = await signedHarness();
+    const body = JSON.stringify({ text: `https://youtu.be/${VIDEO}` });
+    const signature = (await hmacSha256Hex(HMAC_SECRET, body)).toUpperCase();
+    expect((await send(h, body, signature)).status).toBe(202);
+  });
+
+  it('gives the same opaque 401 for a bad signature as for a bad token', async () => {
+    const h = await signedHarness();
+    const body = JSON.stringify({ text: 'x' });
+    const badSignature = await send(h, body, 'deadbeef');
+    expect(await badSignature.json()).toEqual({ error: 'unauthorized' });
   });
 });

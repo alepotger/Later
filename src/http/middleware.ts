@@ -74,14 +74,12 @@ export function requireIngestAuth(): MiddlewareHandler<AppBindings> {
 
     if (hmacSecret !== undefined) {
       const signature = c.req.header('x-later-signature') ?? '';
-      const body = await c.req.text();
-      const expected = await hmacSha256Hex(hmacSecret, body);
+      // Hono caches the parsed body, so the handler can read it again after this.
+      const expected = await hmacSha256Hex(hmacSecret, await c.req.text());
       if (!timingSafeEqual(signature.toLowerCase(), expected)) {
         c.get('logger').warn('ingest rejected: bad signature');
         return c.json({ error: 'unauthorized' }, 401);
       }
-      // Cache the consumed body so the handler can read it again.
-      c.set('rawBody' as never, body as never);
     }
 
     await next();

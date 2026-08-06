@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       '@hono/node-server':
-        specifier: ^2.1.0
+        specifier: 2.1.0
         version: 2.1.0(hono@4.13.0)
       drizzle-orm:
         specifier: 0.45.2
