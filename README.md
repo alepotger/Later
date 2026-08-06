@@ -26,9 +26,11 @@ If that's a dealbreaker, stop here — you'll save yourself 15 minutes.
 
 ## Status
 
-**Phase 3 code-complete.** Share a YouTube link and it lands in your playlist, deduplicated, with quota tracked and token expiry handled. iOS Shortcut, Android PWA share target, and a Telegram bot all hit the same endpoint. A Reel whose caption only *describes* a video is resolved through oEmbed and an optional LLM — or honestly held for one-tap review when Later is not sure. 454 tests, none of which need credentials.
+**Phase 4 code-complete.** Share a YouTube link and it lands in your playlist, deduplicated, with quota tracked and token expiry handled. iOS Shortcut, Android PWA share target, and a Telegram bot all hit the same endpoint. A Reel whose caption only *describes* a video is resolved through oEmbed and an optional LLM — or honestly held for one-tap review when Later is not sure. Deploy it with one button or one `docker compose up`, for yourself or for a household. 494 tests, none of which need credentials.
 
-What is not built yet: multi-user mode and the one-click deploy (Phase 4). Start with [SETUP.md](SETUP.md).
+Start with [SETUP.md](SETUP.md) to run it locally, or [DEPLOY.md](DEPLOY.md) to put it somewhere your phone can reach.
+
+**Not yet verified against a live deployment:** the author has not yet run a real Google OAuth round-trip or built the Docker image on a machine with a Docker daemon. Both are written and covered by tests against stubs; neither has been observed working end to end with real credentials. Tracked in [PLAN.md](PLAN.md) and [docs/verification-log.md](docs/verification-log.md).
 
 Later is being built in phases, and `main` is kept working at every phase boundary. See [PLAN.md](PLAN.md) for what's built and what's next.
 
@@ -38,7 +40,7 @@ Later is being built in phases, and `main` is kept working at every phase bounda
 | 1 | The spine: share a YouTube link → it lands in the playlist | ✅ done |
 | 2 | iOS Shortcut, Android PWA share target, Telegram bot, notifications | ✅ done |
 | 3 | Resolving videos that are *described* but not linked | ✅ done |
-| 4 | Multi-user, one-click deploy, docs pass | 🔜 next |
+| 4 | Multi-user, one-click deploy, docs pass | ✅ done |
 
 ---
 
@@ -64,6 +66,8 @@ The endpoint answers in milliseconds and the work happens after. You never wait 
 
 **Most shares never cost a thing.** A TikTok or Reel whose caption contains a YouTube link is handled by Tier 0 — a regex and one cheap lookup. No LLM, no search, no API key beyond YouTube itself. Later works fully with no LLM configured.
 
+**One instance, or one per household.** `SOLO` is the default: one Google account, locked to the first person who authorises. `LATER_MODE=MULTI` lets several people on an email allowlist each connect their own account and write to their own playlist — sharing, unavoidably, one daily API quota. [ADR-0013](docs/adr/0013-solo-and-multi-modes.md).
+
 ## About Gemini
 
 The original instinct behind this project was that YouTube permissions might be easier to reach through Gemini. That is worth correcting plainly, because building on it would waste a lot of time:
@@ -76,7 +80,15 @@ See [ADR-0009](docs/adr/0009-llm-provider-and-the-gemini-question.md).
 
 ## Deploying it
 
-Later is built so that one person with no budget can run it: **Cloudflare Workers + D1 on the free tier** as the primary target (no card, no cold-start penalty, cron included), and a **`docker compose up`** path for anyone who'd rather self-host. Both are first-class. See [ADR-0002](docs/adr/0002-hosting-cloudflare-workers-primary.md).
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/alepotger/Later)
+
+```bash
+docker compose up -d --build     # or self-host, if you'd rather
+```
+
+Later is built so that one person with no budget can run it: **Cloudflare Workers + D1 on the free tier** as the primary target (no card, no cold-start penalty, cron included), and a **Docker** path for anyone who'd rather self-host. Both are first-class. See [DEPLOY.md](DEPLOY.md) and [ADR-0002](docs/adr/0002-hosting-cloudflare-workers-primary.md).
+
+The button copies this repository into *your* GitHub account, creates the D1 database, and deploys. You still need your own Google OAuth client first — [Batch 1](docs/ACTION-REQUIRED.md) is the 15-minute console sitting that produces it.
 
 Everything is yours: your Google Cloud project, your OAuth client, your keys, your data. Nothing is tied to the author's account, there is no hosted service, and there is **no telemetry of any kind** — not opt-out, just absent.
 
@@ -100,7 +112,8 @@ That runs the whole pipeline against recorded API responses, so you can see exac
 
 | | |
 |---|---|
-| [SETUP.md](SETUP.md) | Get it running |
+| [SETUP.md](SETUP.md) | Get it running locally |
+| [DEPLOY.md](DEPLOY.md) | Cloudflare or Docker, and SOLO vs MULTI |
 | [clients/](clients/) | Share sheet setup: [iOS](clients/ios/), [Android](clients/android/), [Telegram](clients/telegram/) |
 | [PLAN.md](PLAN.md) | Phase plan and current state |
 | [docs/ACTION-REQUIRED.md](docs/ACTION-REQUIRED.md) | Console steps only a human can do |

@@ -2,15 +2,16 @@
 
 Living document. Updated at every phase boundary and whenever a decision changes.
 
-**Current state: Phase 3 code-complete. All four resolution tiers, the confidence gate, and the review inbox. 454 tests, all green, none needing credentials.**
+**Current state: Phase 4 code-complete. Every phase in the plan is built. 494 tests, all green, none needing credentials.**
 
-Three things are written and tested but not yet verified against reality, all for the same reason — this build environment has no credentials, no phone, and no route to `api.telegram.org`:
+Four things are written and tested but not yet verified against reality, all for the same reason — this build environment has no credentials, no phone, no Docker daemon, and no route to `api.telegram.org`:
 
 | | Needs |
 |---|---|
 | The live Google OAuth round-trip | Batch 1 (done) + one local run by the owner |
 | Telegram ingress and notifications | Batch 2, and a public HTTPS URL |
 | iOS Shortcut / Android PWA | Batch 2, and a physical phone |
+| The Docker image build | a Docker daemon — CI now builds it, starts it, and shares a video through it |
 
 **A sequencing correction:** the phone clients cannot reach `localhost`, and Telegram *pushes* to a webhook, so **Batch 4 (deploy) should be done before Batch 2**, inverting the phase numbering. This is stated at the top of Batch 2 rather than left to be discovered.
 
@@ -183,11 +184,30 @@ Three guards on top of the threshold, each with a test:
 - confirming from the review inbox re-runs the **normal pipeline** rather than adding directly,
   so the dedupe claim and the quota gate still apply
 
-### Phase 4 — Public-ready *(~10 units)*
+### Phase 4 — Public-ready ✅ *code-complete (~10 units)*
 
-MULTI mode · Deploy to Cloudflare button · `docker compose up` from clean checkout · the 15-minute stranger test, run for real and fixed · quota-increase docs · deep link to the playlist.
+| # | Work | Verified how |
+|---|---|---|
+| ✅ 4.1 | MULTI: ingest auth resolves an account instead of comparing one value | 17 end-to-end tests, incl. cross-account isolation |
+| ✅ 4.2 | Per-account ingest tokens — minted in the UI, stored only as a SHA-256 hash | minted over real HTTP, used, and confirmed unreadable afterwards |
+| ✅ 4.3 | Stateless signed web sessions and Telegram link codes | 18 unit tests, all about the ways verification must say no |
+| ✅ 4.4 | `Dockerfile` + `docker-compose.yml`, with a credential-free demo profile | the runtime layout was reproduced and run locally; the **image build is CI-only** |
+| ✅ 4.5 | "Deploy to Cloudflare" button and [DEPLOY.md](DEPLOY.md) covering both targets | button URL and `wrangler.jsonc` resource declaration; **never clicked** |
+| ✅ 4.6 | Batch 4 handoff, with a recommendation at each decision | in `ACTION-REQUIRED.md` |
+| ✅ 4.7 | Quota-increase instructions, with honest expectations | in `TROUBLESHOOTING.md` |
+| ✅ 4.8 | The 15-minute stranger test, run against a clean clone | run; findings below |
+| ✅ 4.9 | Docs pass across README, SETUP, SECURITY, TROUBLESHOOTING, `.env.example` | — |
 
-Needs **Batch 4** (Cloudflare account, production redirect URI, publishing status decision).
+**The design claim MULTI was built to test held.** ADR-0013 predicted the mode would be "a change to the token check alone". It was: `authenticateIngest` in `src/http/accounts.ts`. The pipeline, the job queue and the quota ledger were not touched, because every row already carried an `account_id` from the first migration.
+
+**Two decisions worth naming:**
+
+- **Tokens are stored as a SHA-256 hash and shown once.** A leaked database cannot be used to post shares. The cost is that losing a token has exactly one remedy — mint a new one.
+- **Sessions and link codes are stateless HMACs, not a table.** A session table would cost a query per page load, a sweep job, and a migration, to protect a UI whose worst-case compromise is what an ingest token already grants. The purpose is signed into each message, so a 15-minute link code cannot be replayed as a 30-day cookie — there is a test for exactly that.
+
+**One bug this phase's tests caught:** the Telegram permit check was written as two negations and inverted, so in MULTI a correctly *linked* chat was rejected while an unlinked one got through. It was caught by the test asserting a linked chat can share, not by reading the code.
+
+**Two things this phase deliberately did not do:** neither the Docker image nor the deploy button has been exercised in this environment — there is no Docker daemon and no Cloudflare account. Rather than claim otherwise, CI now builds the image, starts the container, and pushes a share through it on every commit, and the deploy button is Batch 4's first step.
 
 ---
 
@@ -200,9 +220,11 @@ Per §9, human-in-a-browser work is batched so the owner does a few short sittin
 | **1** | Phase 1 finishes (1.7) | Google Cloud project · enable YouTube Data API v3 · OAuth consent screen · OAuth client + localhost redirect URI · generate local secrets | ~15 min |
 | 2 | Phase 2 | Telegram bot via BotFather · import iOS Shortcut on a phone | ~10 min |
 | 3 | Phase 3 | Gemini API key (same project) | ~3 min |
-| 4 | Phase 4 | Cloudflare account · deploy · add production redirect URI · Testing→Production decision | ~15 min |
+| **4** | **now — before Batch 2** | Cloudflare account · deploy · add production redirect URI · SOLO/MULTI decision · Testing→Production decision | ~15 min |
 
-Batch 1 is written and waiting. Batches 2–4 are drafted at the end of `ACTION-REQUIRED.md` so the shape is visible in advance, and will be finalised with exact resolved values when their phase arrives — a production redirect URI cannot be written down before the deployment exists, and §9 forbids guessing it.
+**All four batches are now written out in full** in `ACTION-REQUIRED.md`, in the order they should be done. Batch 1 is complete. Batch 4 should come next, before Batch 2: the phone clients and the Telegram webhook all need a public HTTPS URL, and `localhost` is not one.
+
+One value still cannot honestly be written down — your deployed origin does not exist until you deploy. Batch 4 is structured so you observe it at step A2 and carry it into A3, A4 and A5, rather than my guessing a hostname. §9 forbids the guess.
 
 ---
 
@@ -224,14 +246,14 @@ Recorded here because "we already decided not to" is the cheapest answer to a re
 
 Tracked against §11 of the brief. Nothing here is checked until it has actually been observed working.
 
-- [ ] Stranger goes fork → first saved video in under 15 minutes
+- [x] Stranger goes fork → first saved video in under 15 minutes *(run against a clean clone in fixtures mode: clone → install → run → connect → share → dedupe, ~4 minutes. The Google-credential half of the path still depends on Batch 1, which is the owner's to run.)*
 - [ ] TikTok containing a YouTube link, shared from a phone, lands in the playlist — ≤3 taps, no waiting *(clients built; needs a deploy and a phone to observe)*
 - [x] Reel whose caption *describes* a video resolves, or is honestly held for review *(against fixture providers; a live model needs Batch 3)*
 - [x] Duplicates never double-add — enforced by `UNIQUE(account_id, video_id)`, tested at both layers
 - [x] Token expiry produces a notification and a working one-tap re-auth — not silence *(verified against a stubbed token endpoint; the live round-trip awaits Batch 1)*
 - [x] Quota exhaustion queues and retries — never drops, and does not consume a retry attempt
 - [x] README states the Watch Later limitation plainly, above the fold
-- [ ] `docker compose up` works from a clean checkout with only `.env` filled in
+- [x] `docker compose up` works from a clean checkout with only `.env` filled in *(the image build itself is verified by CI, not by me — this environment has no Docker daemon. The exact runtime layout the image ships, production-only `node_modules` plus the bundle plus `drizzle/`, was reproduced and run locally end to end.)*
 - [x] Zero secrets in git history
-- [x] CI green — [run 31103491442](https://github.com/alepotger/Later/actions/runs/31103491442): lint, typecheck, 336 tests, migration-drift check, both deploy targets bundled, full-history secret scan
+- [x] CI green — lint, typecheck, 494 tests, migration-drift check, both deploy targets bundled, the Docker image built and driven, full-history secret scan
 - [x] `ACTION-REQUIRED.md` complete and ordered for the current phase, with nothing guessed

@@ -38,7 +38,9 @@ Later will not work around this with headless browsers or cookie replay: it viol
 
 ---
 
-## "Nothing has been added since some time this afternoon"
+## Running out of quota
+
+### "Nothing has been added since some time this afternoon"
 
 **Cause.** You've hit the daily API quota. Default is 10,000 units/day, and it resets at **midnight Pacific Time** — not midnight where you are.
 
@@ -56,7 +58,18 @@ Later will not work around this with headless browsers or cookie replay: it viol
 | Something else uses this project | Later's default budget of 9,000 leaves headroom, but a second app can still exhaust the real 10,000. |
 | Tier 0 failing on a URL form | Should be free, became a search. **Please open an issue with the URL** — that's a bug worth fixing and it's cheap to fix. |
 
-**Raise it:** search for the **"YouTube API Services - Audit and Quota Extension Form"**. Expect to explain your use case; approval isn't automatic and isn't quick. Details in [ADR-0006](docs/adr/0006-quota-strategy.md).
+### Raising the quota
+
+The 10,000-unit default belongs to your Google Cloud *project*, not to you or to Later, and it is the same number for everyone. To increase it you have to ask Google.
+
+1. Open **https://console.cloud.google.com/apis/api/youtube.googleapis.com/quotas** with your `later` project selected
+2. Confirm the current limit reads **10,000** "Queries per day" — that is the number Later's default budget of 9,000 sits under
+3. Click the **"YouTube API Services - Audit and Quota Extension Form"** link, or search that exact phrase
+4. Fill it in. It asks what your application does, who uses it, and how it complies with the YouTube API Services Terms of Service
+
+> **You'll know this worked when** the "Queries per day" figure on the quotas page goes above 10,000. Then raise `YOUTUBE_DAILY_QUOTA_BUDGET` to about 90% of the new number.
+
+**Set expectations honestly:** this is a manual review, approval is not automatic, and it is not quick — plan in weeks, not days. A personal instance saving a few dozen videos a day does not need it. If you are sharing an instance with three other people and hitting the ceiling, one deployment per person is faster and gives each of you a full allowance. Details in [ADR-0006](docs/adr/0006-quota-strategy.md).
 
 ---
 
@@ -71,7 +84,7 @@ Check all of these:
 | `PUBLIC_BASE_URL` has **no trailing slash** | `http://localhost:8787`, not `.../` |
 | The full callback path is registered | `.../auth/callback` — the path counts |
 | `localhost` vs `127.0.0.1` | Google treats these as **different URIs**. Register both. |
-| Port matches | 8787 for Workers dev, 3000 for Node/Docker |
+| Port matches | 8787 by default on every target — the Node server takes its port from `PUBLIC_BASE_URL` |
 | `http` vs `https` | `http` only for loopback; deployed must be `https` |
 | Deployed URL is registered at all | It isn't by default — Batch 4 adds it |
 
@@ -91,11 +104,12 @@ You are the developer of the app you are authorising. Verification exists to pro
 
 ## Ingest returns `401`
 
-The `Authorization: Bearer <token>` header doesn't match `INGEST_TOKEN`.
+The `Authorization: Bearer <token>` header doesn't match a token Later recognises.
 
 - Whitespace or a newline copied along with the token — the most common cause by a mile
 - The header must be exactly `Authorization: Bearer <token>` — the space matters
 - You rotated `INGEST_TOKEN` but didn't update the client (Shortcut, PWA, Telegram config)
+- **In MULTI mode, `INGEST_TOKEN` is not a valid token at all.** Each account mints its own from the web UI after connecting Google; the instance-wide one authenticates nothing. Sign in, press **"Create my ingest token"**, and copy the value it shows once
 - You set `INGEST_HMAC_SECRET`, which makes signatures mandatory and **breaks the iOS Shortcut** — unset it unless you're deliberately using HMAC ([ADR-0008](docs/adr/0008-ingest-authentication.md))
 
 ## Ingest returns `429`
@@ -142,9 +156,11 @@ If you're seeing genuine duplicates, that's a real bug. Please open an issue wit
 
 ## Telegram bot doesn't respond
 
-1. `TELEGRAM_ALLOWED_CHAT_IDS` must contain **your** numeric chat ID. Later ignores anyone not on it — silently and on purpose, because the bot's username is discoverable and an open bot would let strangers write to your playlist.
+1. **In SOLO,** `TELEGRAM_ALLOWED_CHAT_IDS` must contain **your** numeric chat ID. Later ignores anyone not on it — silently and on purpose, because the bot's username is discoverable and an open bot would let strangers write to your playlist. Send the bot `/id` to find the number.
 2. The webhook must be registered with your `PUBLIC_BASE_URL`. It can't reach `localhost` — use a deployed instance or a tunnel.
 3. `TELEGRAM_WEBHOOK_SECRET` must match what was set when the webhook was registered.
+
+**In MULTI, the bot replies but says the chat is not connected.** That is the linking step, not a fault: sign in to the web UI, copy the `/link ...` command from the account panel, and send it to the bot. Codes expire after 15 minutes; if yours has, reload the page for a fresh one.
 
 ## PWA doesn't appear in the Android share sheet
 

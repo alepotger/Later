@@ -57,3 +57,17 @@ MULTI additionally requires an explicit email allowlist. Not "anyone who has the
 - **MULTI gets real use and quota contention becomes the top complaint.** Then per-account daily sub-budgets — reserving a share of the pool per user so one person can't starve the rest. Deliberately not built speculatively; the ledger already has the shape for it.
 - **Someone wants MULTI without an allowlist**, e.g. a Workspace domain. Then allow a domain suffix rule, still explicit, never open.
 - **SOLO's first-auth lock proves annoying** — a deployer who authorises the wrong Google account needs a documented reset, which should be a config flag rather than a database edit.
+
+---
+
+## Implementation note — 2026-08-06 (Phase 4)
+
+Built as designed; the decision above needed no revision. Three things it did not specify, decided during implementation:
+
+**Per-account ingest tokens are stored as a SHA-256 hash and shown exactly once.** The plaintext never touches the database, so a leaked dump cannot be used to post shares. The cost is that "I lost my token" has one answer — mint a new one — which is the right trade for a credential a user copies into a Shortcut once.
+
+**Web sessions and Telegram link codes are stateless HMACs over the account ID**, signed with `SESSION_SECRET`, rather than a `sessions` table. A session table would cost a query per page load, a sweep job, and a migration, to protect a UI whose worst-case compromise is what an ingest token already grants. The two credentials carry different purposes inside the signed message, so a 15-minute link code cannot be replayed as a 30-day cookie. Documented in [SECURITY.md](../../SECURITY.md#multi-mode-sessions-and-telegram-linking).
+
+**`TELEGRAM_ALLOWED_CHAT_IDS` becomes optional in MULTI**, where it is mandatory in SOLO. In MULTI, `/link` with a signed code *is* the ownership proof, and an unlinked chat can do nothing else. Keeping the env allowlist mandatory would have meant editing config and redeploying for every household member — exactly the friction the mode exists to remove. A deployer who sets it anyway still gets it enforced.
+
+The claim in "Consequences" that this is a change to the token check alone held up: `authenticateIngest` in `src/http/accounts.ts` is the whole of it on the ingest path. The pipeline, the job queue and the quota ledger were untouched.

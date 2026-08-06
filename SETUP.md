@@ -67,7 +67,7 @@ Fill in the five required values. Every variable is documented inline in the fil
 |---|---|
 | `GOOGLE_CLIENT_ID` | Batch 1 step 7 — ends in `.apps.googleusercontent.com` |
 | `GOOGLE_CLIENT_SECRET` | Batch 1 step 7 — starts with `GOCSPX-` |
-| `INGEST_TOKEN` | `openssl rand -base64 32 \| tr '+/' '-_' \| tr -d '='` |
+| `INGEST_TOKEN` | `openssl rand -base64 32 \| tr '+/' '-_' \| tr -d '='` (SOLO only) |
 | `TOKEN_ENCRYPTION_KEY` | `openssl rand -base64 32` |
 | `SESSION_SECRET` | `openssl rand -base64 32` |
 
@@ -80,6 +80,19 @@ GOOGLE_OAUTH_PUBLISHING_STATUS=production
 **Keep `TOKEN_ENCRYPTION_KEY` somewhere safe.** It decrypts your stored Google token. Lose it and you re-authorise; there's no other consequence, but it's avoidable annoyance.
 
 `.env` is gitignored, and CI scans the full git history for secrets on every push.
+
+---
+
+### Sharing the instance with other people
+
+Skip this unless you need it. By default Later is `SOLO`: one Google account, locked to whoever authorises first.
+
+```dotenv
+LATER_MODE=MULTI
+LATER_ALLOWED_EMAILS=you@example.com,partner@example.com
+```
+
+Each person then connects their own Google account, writes to their own playlist, and mints their own ingest token from the web UI. `INGEST_TOKEN` is ignored. The catch, which Later cannot fix: everyone shares one 10,000-unit daily API quota. [DEPLOY.md](DEPLOY.md#choosing-solo-or-multi) has the numbers.
 
 ---
 
@@ -121,7 +134,7 @@ Both matter, and it's worth knowing why there are two: YouTube stopped rejecting
 
 This is the point of Later: never opening a web page. Three routes, all hitting the same endpoint.
 
-**They all need a URL your phone can reach**, which `localhost` is not. Either deploy first (Phase 4, or `wrangler deploy` if you're comfortable) or run a tunnel:
+**They all need a URL your phone can reach**, which `localhost` is not. Either [deploy first](DEPLOY.md) — that is the recommended order, and it is one button — or run a tunnel:
 
 ```bash
 cloudflared tunnel --url http://localhost:8787   # prints a temporary HTTPS URL
@@ -170,7 +183,10 @@ Being straight about this so you know what you're getting:
 | iOS Shortcut · Android PWA · Telegram bot | ✅ built (needs a reachable URL) |
 | Notifications (Telegram / webhook) | ✅ works |
 | Resolving a caption that *describes* a video | ✅ works (needs an LLM key for Tier 2) |
-| One-click deploy · `docker compose up` | ⬜ Phase 4 |
+| One-click deploy · `docker compose up` | ✅ works — see [DEPLOY.md](DEPLOY.md) |
+| Several people on one instance (`LATER_MODE=MULTI`) | ✅ works |
+
+Two things have never been run for real by the author: a live Google OAuth round-trip, and a Docker image build (this development environment has no Docker daemon). Both are written and tested against stubs. If either fails for you, that is worth an issue — see [PLAN.md](PLAN.md).
 
 Current state is always in [PLAN.md](PLAN.md).
 
@@ -197,5 +213,7 @@ Current state is always in [PLAN.md](PLAN.md).
 | `POST /api/ingest` | The endpoint every client uses |
 | `GET /auth/start` | Begin (or renew) Google authorisation |
 | `GET /share-target` | Android PWA share target |
+| `GET /review` | Items resolved below the confidence threshold |
+| `POST /account/ingest-token` | MULTI only: mint this account's token |
 
 **When something goes wrong:** [TROUBLESHOOTING.md](TROUBLESHOOTING.md). If it stopped working after about a week, read the first entry.

@@ -98,3 +98,29 @@ Checked because the hosting decision rests on them ([ADR-0002](adr/0002-hosting-
 | Gemini free tier covers the Flash models via REST with an API-key header; Pro models are paid-only as of 2026 | confirmed (rate-limit figures vary by source: 10 RPM, and either 250 or 1,500 requests/day) |
 
 The Gemini rate-limit disagreement between sources does not affect the design: Tier 2 is invoked at most once per ingested item that lacks a URL, which is far below even the most conservative figure, and the LLM is optional anyway.
+
+---
+
+## What has *not* been verified — running list
+
+Kept current so nobody has to reverse-engineer it from phase notes. Everything here is written, typechecked, and covered by tests against a stub or fixture at the network boundary; none of it has been observed working against the real thing from this environment.
+
+**Updated: 2026-08-06, end of Phase 4.**
+
+| Claim | Why it is unverified | What would verify it |
+|---|---|---|
+| A real Google OAuth round-trip completes and returns a refresh token | no credentials here; every branch is tested against a stubbed token endpoint | the owner running `pnpm dev` and clicking **Connect Google** once, after Batch 1 |
+| Telegram ingress and notifications reach real Telegram | `api.telegram.org` is blocked by the egress policy | Batch 2, on a deployed instance |
+| The iOS Shortcut `.plist` imports on a device | no iPhone; Apple only allows frictionless import from an iCloud link, which needs a device | Batch 2 |
+| The Android PWA appears in the share sheet | no Android device, and `share_target` needs HTTPS | Batch 2 |
+| The Docker image builds and runs | **no Docker daemon in this environment** — the build was never executed | CI now runs `docker build`, starts the container, and pushes a share through it on every commit; a green `Docker image builds and runs` job is the verification |
+| The "Deploy to Cloudflare" button provisions D1 and deploys | no Cloudflare account | Batch 4 step A2 |
+| Instagram oEmbed works without a token (see above) | medium-confidence, from third-party write-ups | one live call against a public Reel |
+
+**What *was* verified locally for the Docker path**, since the image itself could not be: the exact layout the runtime stage ships — a production-only pnpm `node_modules`, the esbuild bundle, and `drizzle/` — was reproduced in a scratch directory and started with `node dist/later.js`. It migrated, listened, served `/healthz`, and answered `/api/ingest`. What that does *not* prove is anything about the Dockerfile itself: base image, layer copying, the pnpm symlink tree surviving `COPY --from`, or the native SQLite binding compiling on the build platform. Those are exactly what the CI job exists to catch.
+
+## Incidental finding — the Node server's default port
+
+`.env.example` and `TROUBLESHOOTING.md` both claimed the Node/Docker path listens on **3000**. It does not. `src/entry/node.ts` derives the port from `PUBLIC_BASE_URL`, which defaults to `http://localhost:8787`, so **every local target listens on 8787**; 3000 is only reached if `PUBLIC_BASE_URL` has no port at all.
+
+Found by running a clean clone through `SETUP.md` and reading the server's own startup log rather than the documentation. Corrected at both sources, and noted as a correction to Batch 1 in `ACTION-REQUIRED.md` (which is append-only, so the original stands).

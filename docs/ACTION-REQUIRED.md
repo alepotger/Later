@@ -240,6 +240,8 @@ I'll then finish Phase 1 against the fixture client and hand you `SETUP.md` with
 
 ## Batches 2–4 — drafted, not yet actionable
 
+> **Superseded, 2026-08-06.** All three have since been written out in full, further down this file: [Batch 2](#batch-2--telegram-bot-and-the-ios-shortcut), [Batch 3](#batch-3--gemini-api-key-optional), [Batch 4](#batch-4--deploy). Follow those, not these sketches. The sketches are kept because this file is append-only — nothing here is ever rewritten or deleted, so you can always see what was promised versus what arrived.
+
 Listed now so the total console cost of this project is visible up front rather than arriving as a surprise. **Do not do these yet** — each will be rewritten as a full, exact, step-by-step batch when its phase arrives, with every value resolved.
 
 Some values in these batches **cannot honestly be written down yet**: your production redirect URI depends on a hostname that won't exist until Batch 4's deployment. §9 forbids guessing, so those steps stay drafts until the real value exists.
@@ -479,3 +481,201 @@ LLM_MODEL=llama3.2
 3. If it resolved the *wrong* video, the caption you shared and what it picked — that is a ranking bug and the fixtures for it live in `tests/core/ranking.test.ts`
 
 **No keys in chat.** `GEMINI_API_KEY` is a credential.
+
+---
+
+## Batch 4 — Deploy
+
+**Logged:** 2026-08-06 · **Needed before:** the phone clients can work at all, and before the project is finished
+**Estimated time:** ~15 minutes for Cloudflare, ~5 for Docker · **Waiting periods:** none
+**Blocks me?** Yes, for final sign-off. Everything is built and tested; this sandbox has no Cloudflare account and no Docker daemon, so a live deployment is yours to make.
+
+**Do Batch 1 first.** Deploying without a Google OAuth client gives you a service that starts and then refuses to do anything useful.
+
+**Do this before Batch 2.** Both phone clients need a public HTTPS URL, and `localhost` is not one.
+
+### Choose your target first
+
+| | **A — Cloudflare Workers** | **B — Docker** |
+|---|---|---|
+| Cost | free tier, no card | a machine you already have |
+| Public HTTPS URL | included | you arrange it |
+| Time | ~15 min | ~5 min + however long TLS takes you |
+
+**Recommendation: A.** The phone clients need a public HTTPS URL and Cloudflare hands you one. Pick B only if you already run a homelab with a reverse proxy and want the data on a disk you can see.
+
+Full reference for both: [DEPLOY.md](../DEPLOY.md).
+
+---
+
+### Option A — Cloudflare Workers
+
+#### A1 — Create a Cloudflare account (2 min)
+
+Go to **https://dash.cloudflare.com/sign-up**. Email and a password. No card, no identity check.
+
+> **You'll know this worked when** you land on the Cloudflare dashboard with an account name in the top-left.
+
+#### A2 — Click the deploy button (3 min)
+
+Open the repository README and click **"Deploy to Cloudflare"**, or go straight to:
+
+```
+https://deploy.workers.cloudflare.com/?url=https://github.com/alepotger/Later
+```
+
+Cloudflare will ask to connect your GitHub account, then show a form:
+
+- **Repository name** — `Later` is fine. This creates a **copy in your own GitHub account**; you are not pushing to mine.
+- It will list the resources it is about to create. **`later-db` (D1 database)** must be one of them.
+
+Click **"Create and deploy"**.
+
+> **You'll know this worked when** the build finishes and the page shows a URL ending in `.workers.dev`. **Copy that URL — every remaining step needs it.** It looks like `https://later.something.workers.dev`.
+
+If the build fails, open the build log and read the first error, not the last. Send it to me and I'll fix it.
+
+#### A3 — Set the five secrets (4 min)
+
+In the Cloudflare dashboard: **Workers & Pages** → **later** → **Settings** → **Variables and Secrets** → **"Add"**, and set **Type: Secret** for each.
+
+| Name | Value | Where it came from |
+|---|---|---|
+| `GOOGLE_CLIENT_ID` | ends `.apps.googleusercontent.com` | Batch 1 step 7 |
+| `GOOGLE_CLIENT_SECRET` | starts `GOCSPX-` | Batch 1 step 7 |
+| `INGEST_TOKEN` | your 43-character token | Batch 1 step 9 |
+| `TOKEN_ENCRYPTION_KEY` | your base64 32-byte key | Batch 1 step 9 |
+| `SESSION_SECRET` | your third random value | Batch 1 step 9 |
+
+Use the **same** values as your local `.env`. Especially `TOKEN_ENCRYPTION_KEY` — a different one there means the deployment cannot decrypt anything the local instance stored, and vice versa.
+
+Then add one **plain text variable** (Type: Text, not Secret), using the URL from A2 with **no trailing slash**:
+
+| Name | Value |
+|---|---|
+| `PUBLIC_BASE_URL` | `https://later.<your-subdomain>.workers.dev` |
+
+Click **"Deploy"** to apply them.
+
+> **You'll know this worked when** `https://<your-url>/healthz` returns `{"ok":true,"mode":"SOLO"}`.
+
+#### A4 — Register the production redirect URI (2 min)
+
+**This is the step people skip, and then authorisation fails with `redirect_uri_mismatch`.**
+
+1. Go to **https://console.cloud.google.com/auth/clients** with your `later` project selected
+2. Click your OAuth client (the one from Batch 1 step 7)
+3. Under **"Authorized redirect URIs"**, click **"+ ADD URI"**
+4. Paste your deployed callback — the A2 URL with `/auth/callback` on the end, exactly, no trailing slash:
+
+```
+https://later.<your-subdomain>.workers.dev/auth/callback
+```
+
+5. Click **"SAVE"**
+
+> **You'll know this worked when** the URI is listed alongside the four `localhost` ones from Batch 1. Google can take a minute or two to propagate; if the next step fails with a mismatch, wait 60 seconds and retry before changing anything.
+
+#### A5 — Authorise, immediately (2 min)
+
+**Do this before you give the URL to anyone else.** On a fresh SOLO deployment, whoever reaches `/auth/start` first claims the instance. Every later attempt is refused — that is the protection — but the first one is open by necessity.
+
+1. Open `https://<your-url>/`
+2. Click **"Connect Google"**
+3. Choose your account, click through **"Advanced"** → **"Go to Later (unsafe)"**, grant the YouTube permission
+
+> **You'll know this worked when** the page says **"Connected as you@example.com"** and names the playlist it created.
+
+#### A6 — Save a video (1 min)
+
+Paste a YouTube link into the box and press **"Save it"**.
+
+> **You'll know this worked when** the page says **"Got it · 1 saved"** and the video is in your `Later` playlist in the YouTube app.
+
+**That is the whole product working, end to end, on a real deployment.** Everything after this is convenience.
+
+---
+
+### Option B — Docker
+
+Needs Docker Desktop or Docker Engine with Compose **v2.24 or newer** (`docker compose version`).
+
+#### B1 — Clone and configure (3 min)
+
+```bash
+git clone https://github.com/alepotger/Later.git && cd Later
+cp .env.example .env
+```
+
+Fill in the five values from Batch 1, exactly as in [SETUP.md](../SETUP.md#step-2--configure). Set `PUBLIC_BASE_URL` to whatever external HTTPS origin you will actually use — not `localhost`, unless you only ever intend to use this from the same machine.
+
+#### B2 — Start it (2 min, plus the first build)
+
+```bash
+docker compose up -d --build
+docker compose logs -f later
+```
+
+> **You'll know this worked when** the log ends with `later is listening` and `curl http://localhost:8787/healthz` returns `{"ok":true,"mode":"SOLO"}`.
+
+If it exits instead, the log will name every config value that is missing or malformed and how to generate it. That output is the fix; it is not a crash.
+
+#### B3 — Give it a public URL
+
+The container speaks plain HTTP on `8787` and does not terminate TLS. Put it behind Caddy, nginx, Traefik, or a Cloudflare Tunnel, then set `PUBLIC_BASE_URL` to the external origin and `docker compose up -d` again.
+
+For a throwaway test:
+
+```bash
+cloudflared tunnel --url http://localhost:8787
+```
+
+#### B4–B6
+
+Same as **A4**, **A5** and **A6** above, using your own origin in place of the `workers.dev` one.
+
+---
+
+### Decide: SOLO or MULTI
+
+**Recommendation: leave it as SOLO** unless someone else is going to use this instance. SOLO is the default, needs no extra configuration, and locks the instance to your account after the first authorisation.
+
+If you do want to share it:
+
+```dotenv
+LATER_MODE=MULTI
+LATER_ALLOWED_EMAILS=you@example.com,someone@example.com
+```
+
+Each person then connects their own Google account, gets their own playlist, and mints their own ingest token from the web UI. `INGEST_TOKEN` stops being used.
+
+**Know the trade before choosing it:** everyone on the instance shares one 10,000-unit daily YouTube quota, because the allowance belongs to the Google Cloud project rather than the user. Four people is roughly 45 link-bearing shares each per day. Later cannot fix that; the honest answers are a quota increase (slow, manual review) or one deployment per person.
+
+### Decide: Testing or Production, again
+
+You chose this in Batch 1 step 6, and this is the point where it starts costing you. If your OAuth app is still in **Testing**, Google will revoke the refresh token you just created **exactly 7 days from now** and Later will stop saving videos.
+
+Publishing is one click and free: **https://console.cloud.google.com/auth/overview** → **"Publish app"** → **"Confirm"**, then set `GOOGLE_OAUTH_PUBLISHING_STATUS=production` and redeploy.
+
+**Recommendation: publish.** The "unverified app" warning you click past once is not a risk to you — you are the developer of the app you are authorising.
+
+### Batch 4 done — what to tell me
+
+1. **"Batch 4 done"**, and which option you took
+2. **Your deployed origin** (e.g. `https://later.something.workers.dev`) — not a secret, and I need it to write the exact client configuration in Batch 2
+3. Whether A5 and A6 both worked, and the exact error if either did not
+4. Your `LATER_MODE` and `GOOGLE_OAUTH_PUBLISHING_STATUS` choices
+
+**No secrets in chat.** Not the client secret, not `TOKEN_ENCRYPTION_KEY`, not an ingest token. I do not need any of them and should not have them.
+
+---
+
+## Correction to Batch 1 — 2026-08-06
+
+This file is append-only, so the original stands above and the fix lives here.
+
+**Batch 1 step 7 says "Port 8787 is the Cloudflare Workers dev server; 3000 is the Node/Docker path."** The second half is wrong. Later's Node server takes its port from `PUBLIC_BASE_URL`, which defaults to `http://localhost:8787`, so **every local target listens on 8787 by default**. Port 3000 is only reached if you set `PUBLIC_BASE_URL` to a URL with no port at all.
+
+**Nothing to redo.** Registering the two `:3000` redirect URIs was harmless — a registered URI that never gets used costs nothing, and it means the port still works if you ever set it. Keep all four.
+
+Found by following `SETUP.md` from a clean clone and checking what the server actually printed, rather than what the docs claimed. `.env.example` and `TROUBLESHOOTING.md` have been corrected at the source.
