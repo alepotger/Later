@@ -11,6 +11,9 @@ importers:
       '@hono/node-server':
         specifier: 2.1.0
         version: 2.1.0(hono@4.13.0)
+      better-sqlite3:
+        specifier: 13.0.3
+        version: 13.0.3
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@cloudflare/workers-types@5.20260804.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)
@@ -30,9 +33,6 @@ importers:
       '@types/node':
         specifier: 22.18.12
         version: 22.18.12
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
       drizzle-kit:
         specifier: 0.31.10
         version: 0.31.10

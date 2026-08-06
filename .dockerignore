@@ -1,0 +1,26 @@
+# Keep the build context small and, more importantly, keep secrets out of it. Anything
+# copied into a layer is recoverable from the image even if a later layer deletes it.
+.env
+.env.*
+!.env.example
+*.db
+*.db-wal
+*.db-shm
+data/
+
+.git
+.github
+.wrangler
+node_modules
+dist
+coverage
+
+docs
+clients
+scripts
+tests
+*.md
+!README.md
+
+biome.json
+vitest.config.ts

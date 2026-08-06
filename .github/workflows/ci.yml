@@ -78,6 +78,50 @@ jobs:
           # Later collects no telemetry; opt its build tooling out too.
           WRANGLER_SEND_METRICS: 'false'
 
+  docker:
+    name: Docker image builds and runs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t later:ci .
+
+      # Building is not enough: the runtime stage carries a pnpm symlink tree, a native SQLite
+      # binding and a bundled ESM entry point, and any of the three can be wrong in a way that
+      # only shows at startup. So actually start it and ask it a question.
+      - name: Start it in fixtures mode
+        run: |
+          docker run -d --name later-ci -p 8787:8787 \
+            -e USE_FIXTURES=true \
+            -e PUBLIC_BASE_URL=http://localhost:8787 \
+            later:ci
+
+      - name: It answers /healthz
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://localhost:8787/healthz | tee /tmp/health | grep -q '"ok":true'; then
+              echo "healthy after ${attempt}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::container never became healthy"
+          docker logs later-ci
+          exit 1
+
+      - name: It accepts a share and resolves it
+        run: |
+          curl -fsS "http://localhost:8787/auth/start" -o /dev/null
+          curl -fsS -X POST http://localhost:8787/api/ingest \
+            -H 'authorization: Bearer fixtures-mode-placeholder-not-a-secret' \
+            -H 'content-type: application/json' \
+            -d '{"text":"https://youtu.be/dQw4w9WgXcQ"}' | tee /tmp/ingest
+          grep -q '"videoId":"dQw4w9WgXcQ"' /tmp/ingest
+
+      - name: Container logs
+        if: always()
+        run: docker logs later-ci
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest

@@ -1,0 +1,61 @@
+# Later — self-hosted, one container, one SQLite file.
+#
+#   docker compose --profile demo up --build     # no .env needed, nothing reaches Google
+#   cp .env.example .env && docker compose up -d # the real thing
+#
+# Requires Docker Compose v2.24 or newer, for the optional `env_file`.
+#
+# The demo and the real service are two entries rather than one with a clever default,
+# because the one thing worse than a container that will not start is a container that
+# starts, says nothing, and saves your videos into a fixture.
+
+services:
+  later:
+    build: .
+    image: later:local
+    container_name: later
+    restart: unless-stopped
+
+    # Missing on a fresh clone. Later then prints exactly which variables it needs and how to
+    # generate each one, and exits — which is the intended first run, not a failure.
+    env_file:
+      - path: .env
+        required: false
+
+    environment:
+      # Everything else comes from .env. These two the container owns: the database belongs on
+      # the volume rather than the image's writable layer, and the port must match the
+      # published one below.
+      DATABASE_PATH: /data/later.db
+      PORT: "8787"
+
+    ports:
+      - "${LATER_PORT:-8787}:8787"
+
+    volumes:
+      # Named rather than a bind mount: SQLite in WAL mode on a bind-mounted host directory is
+      # a well-known source of locking trouble on macOS and Windows. `docker compose down`
+      # keeps it; `docker compose down -v` deletes it.
+      - later-data:/data
+
+  # Look around before setting up a Google Cloud project. Every outbound call is served from
+  # recorded responses: no credentials, no network, no quota, no real playlist touched.
+  later-demo:
+    profiles: ["demo"]
+    build: .
+    image: later:local
+    container_name: later-demo
+    environment:
+      USE_FIXTURES: "true"
+      DATABASE_PATH: /data/later.db
+      PORT: "8787"
+      PUBLIC_BASE_URL: "http://localhost:${LATER_PORT:-8787}"
+    ports:
+      - "${LATER_PORT:-8787}:8787"
+    # Deliberately not the real volume, and deliberately not persisted: a fixtures database
+    # must never be mistaken for the one holding your actual shares.
+    tmpfs:
+      - /data
+
+volumes:
+  later-data:

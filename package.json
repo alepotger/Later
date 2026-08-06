@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@hono/node-server": "2.1.0",
+    "better-sqlite3": "13.0.3",
     "drizzle-orm": "0.45.2",
     "hono": "4.13.0"
   },
@@ -36,7 +37,6 @@
     "@cloudflare/workers-types": "5.20260804.1",
     "@types/better-sqlite3": "7.6.13",
     "@types/node": "22.18.12",
-    "better-sqlite3": "13.0.3",
     "drizzle-kit": "0.31.10",
     "esbuild": "0.28.1",
     "tsx": "4.20.6",
