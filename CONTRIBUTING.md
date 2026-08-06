@@ -2,7 +2,7 @@
 
 Thanks for looking. Later is small on purpose, and the fastest way to get a change merged is to understand why it's shaped the way it is.
 
-> **Phase 0 note:** there's no application code yet — Phase 0 delivered the architecture and the console prerequisites. The commands below describe the project Phase 1 sets up. Until then, the useful contributions are review of the [ADRs](docs/adr/) and of [`docs/ACTION-REQUIRED.md`](docs/ACTION-REQUIRED.md), especially if a Google Cloud label there doesn't match what you see.
+The fastest way in: `pnpm install && USE_FIXTURES=true pnpm dev`. No credentials needed — see below.
 
 ## Start here
 
@@ -47,7 +47,7 @@ Tier 0 — pulling a YouTube URL out of shared text — is the highest-value cod
 
 For a PR: what changed, why, and how you verified it. If it changes behaviour, it needs a test. If it changes a decision recorded in an ADR, update the ADR in the same PR — or add a new one that supersedes it. An ADR that's quietly false is worse than no ADR.
 
-CI runs lint, typecheck, tests against both database drivers, and a full-history secret scan. `pnpm check` locally catches everything except the secret scan.
+CI runs format, lint, typecheck, and the test suite; checks that generated migrations match `schema.ts`; bundles both deploy targets (the Worker bundle is what catches a `node:` API leaking into shared code); and scans the full git history for secrets. `pnpm check` locally covers everything except the last two.
 
 ## Formatting
 

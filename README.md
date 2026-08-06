@@ -26,15 +26,17 @@ If that's a dealbreaker, stop here — you'll save yourself 15 minutes.
 
 ## Status
 
-**Phase 0 complete — architecture and console prerequisites documented. No working code yet.**
+**Phase 1 code-complete — the product works.** Share a YouTube link and it lands in your playlist, deduplicated, with quota tracked and token expiry handled. 296 tests, none of which need credentials.
+
+What is not built yet: the phone clients (Phase 2), resolving captions that only *describe* a video (Phase 3), and the one-click deploy (Phase 4). Start with [SETUP.md](SETUP.md).
 
 Later is being built in phases, and `main` is kept working at every phase boundary. See [PLAN.md](PLAN.md) for what's built and what's next.
 
 | Phase | What it delivers | Status |
 |---|---|---|
 | 0 | Verified constraints, ADRs, console prerequisites | ✅ done |
-| 1 | The spine: share a YouTube link → it lands in the playlist | 🔜 next |
-| 2 | iOS Shortcut, Android PWA share target, Telegram bot, notifications | ⬜ |
+| 1 | The spine: share a YouTube link → it lands in the playlist | ✅ done |
+| 2 | iOS Shortcut, Android PWA share target, Telegram bot, notifications | 🔜 next |
 | 3 | Resolving videos that are *described* but not linked | ⬜ |
 | 4 | Multi-user, one-click deploy, docs pass | ⬜ |
 
@@ -78,7 +80,15 @@ Later is built so that one person with no budget can run it: **Cloudflare Worker
 
 Everything is yours: your Google Cloud project, your OAuth client, your keys, your data. Nothing is tied to the author's account, there is no hosted service, and there is **no telemetry of any kind** — not opt-out, just absent.
 
-Setup instructions land with Phase 1. The console work you'll need to do by hand is already written up in **[docs/ACTION-REQUIRED.md](docs/ACTION-REQUIRED.md)**, batched so you do it once.
+**[SETUP.md](SETUP.md) walks you through it.** Step 0 takes two minutes and needs no credentials at all:
+
+```bash
+git clone https://github.com/alepotger/Later.git && cd Later
+pnpm install
+USE_FIXTURES=true pnpm dev
+```
+
+That runs the whole pipeline against recorded API responses, so you can see exactly what Later does before deciding whether to set up a Google Cloud project. The console work, when you want it, is batched into one ~15-minute sitting in **[docs/ACTION-REQUIRED.md](docs/ACTION-REQUIRED.md)**.
 
 ### Two things that will bite you, documented up front
 
@@ -90,6 +100,7 @@ Setup instructions land with Phase 1. The console work you'll need to do by hand
 
 | | |
 |---|---|
+| [SETUP.md](SETUP.md) | Get it running |
 | [PLAN.md](PLAN.md) | Phase plan and current state |
 | [docs/ACTION-REQUIRED.md](docs/ACTION-REQUIRED.md) | Console steps only a human can do |
 | [docs/adr/](docs/adr/) | Every significant decision, and what would make me revisit it |

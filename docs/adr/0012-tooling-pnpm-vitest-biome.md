@@ -35,7 +35,13 @@ The bar for the URL extractor is exhaustive fixtures. It handles the majority of
 
 **Conventional Commits** — the commit log is the changelog, and it makes "when did this break?" answerable. No enforcement hook; the discipline is worth more than the ceremony.
 
-CI matrix runs the test suite **against both database drivers** — D1's local emulation and the file-backed SQLite path — because [ADR-0003](0003-sqlite-dialect-everywhere-drizzle.md)'s "one dialect, two drivers" claim is only true if something checks it. Untested, the self-host path would rot within a month.
+CI has to defend [ADR-0003](0003-sqlite-dialect-everywhere-drizzle.md)'s "one dialect, two drivers" claim, because a claim nothing checks rots within a month. What it actually does, as of Phase 1:
+
+- The full test suite runs against **file-backed SQLite** (the self-host driver), using real generated migrations rather than a hand-maintained test schema.
+- The Worker entry is **bundled for `workerd`** via `wrangler deploy --dry-run`. This is the load-bearing check: it fails if any `node:` API or Node-only dependency has leaked into shared code, which is by far the most likely way the two-target promise silently breaks. It caught nothing on first run, which is the point — it is a ratchet, not a debugging tool.
+- Generated migrations are checked for drift against `schema.ts`, so a schema change without a regenerated migration fails rather than shipping a database that does not match the code.
+
+What it does **not** yet do is execute the suite a second time against D1's local emulation. That needs `@cloudflare/vitest-pool-workers` and a separate Vitest project, and it is deferred to Phase 4 with the rest of the deployment work. The dry-run bundle covers the failure mode that actually bites (API-surface leakage); what remains uncovered is D1-specific *runtime* behaviour, most plausibly around `RETURNING` and the batch semantics the job claim relies on. Worth being precise about that gap rather than implying it is closed.
 
 ## Rejected
 

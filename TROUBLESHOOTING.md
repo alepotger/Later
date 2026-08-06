@@ -2,7 +2,7 @@
 
 Ordered by how likely you are to hit it. The first entry accounts for most reports.
 
-> **Phase 0 note:** the failure modes below are verified properties of Google's APIs ([verification log](docs/verification-log.md)) and are documented now because they're known now. Anything referring to log lines, UI screens, or CLI commands describes the behaviour Later is being built to have — this file becomes fully exercisable at the end of Phase 1.
+> The failure modes below are verified properties of Google's APIs ([verification log](docs/verification-log.md)). The handling described for each is implemented and covered by tests, with one exception noted where it appears: the live Google OAuth round-trip has not yet been run against real credentials.
 
 ---
 

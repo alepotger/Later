@@ -1,0 +1,57 @@
+{
+  // Cloudflare Workers configuration — the primary deploy target.
+  //
+  // The "Deploy to Cloudflare" button parses this file, provisions the D1 database below,
+  // writes the real database_id into a fresh repo in the clicker's own account, and prompts
+  // for the secrets. That is why the deployer never has to create a database by hand, and
+  // it is the main reason Cloudflare won the hosting decision.
+  // See docs/adr/0002-hosting-cloudflare-workers-primary.md.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "later",
+  "main": "src/entry/worker.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "observability": {
+    "enabled": true
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "later-db",
+      // Filled in automatically by the deploy button, or by `wrangler d1 create later-db`.
+      "database_id": "PLACEHOLDER_REPLACED_ON_DEPLOY",
+      "migrations_dir": "drizzle"
+    }
+  ],
+
+  "triggers": {
+    "crons": [
+      // Job sweep. Catches anything the inline fast path did not finish, and retries
+      // whatever was deferred. One-minute granularity is available on the free plan.
+      "* * * * *",
+      // Daily maintenance: touch idle tokens so none hits Google's six-month unused-token
+      // rule, and surface a revoked token within a day rather than at the moment the user
+      // next expects a share to land. Matched by DAILY_CRON in src/entry/worker.ts.
+      "0 4 * * *"
+    ]
+  },
+
+  "vars": {
+    // Non-secret defaults. Everything sensitive goes in with `wrangler secret put` instead,
+    // so it is never committed and never visible in the dashboard's plain config.
+    "LATER_MODE": "SOLO",
+    "LATER_PLAYLIST_NAME": "Later",
+    "LATER_PLAYLIST_PRIVACY": "private",
+    "GOOGLE_OAUTH_PUBLISHING_STATUS": "testing",
+    "YOUTUBE_DAILY_QUOTA_BUDGET": "9000",
+    "YOUTUBE_QUOTA_RESET_TZ": "America/Los_Angeles",
+    "RESOLVE_CONFIDENCE_THRESHOLD": "0.75",
+    "ENABLE_PLATFORM_METADATA": "true",
+    "ENABLE_TRANSCRIPT_RESOLUTION": "false",
+    "LLM_PROVIDER": "none",
+    "NOTIFY_ON_SUCCESS": "false",
+    "LOG_LEVEL": "info"
+  }
+}

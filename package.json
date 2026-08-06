@@ -23,11 +23,11 @@
     "build": "esbuild src/entry/node.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/later.js --external:better-sqlite3 --banner:js=\"import{createRequire}from'node:module';const require=createRequire(import.meta.url);\"",
     "start": "node dist/later.js",
     "db:generate": "drizzle-kit generate",
-    "db:apply:local": "tsx scripts/apply-migrations.ts",
     "db:apply:remote": "wrangler d1 migrations apply later-db --remote",
     "deploy": "wrangler d1 migrations apply later-db --remote && wrangler deploy"
   },
   "dependencies": {
+    "@hono/node-server": "2.1.0",
     "drizzle-orm": "0.45.2",
     "hono": "4.13.0"
   },

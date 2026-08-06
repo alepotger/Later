@@ -2,7 +2,9 @@
 
 Living document. Updated at every phase boundary and whenever a decision changes.
 
-**Current state: Phase 0 complete. Phase 1 not started. No application code in the repo yet.**
+**Current state: Phase 1 code-complete. The product works — a shared YouTube link lands in the playlist. 296 tests, all green, none needing credentials.**
+
+The one thing not yet verified against reality is the live Google OAuth round-trip, which needs [Batch 1](docs/ACTION-REQUIRED.md) of the console work. Everything either side of it is tested against the fixture client, including `invalid_grant` and quota exhaustion.
 
 ---
 
@@ -94,28 +96,41 @@ Sizing is in **work units** — one unit is roughly a coherent, independently re
 
 **Deliberately deferred:** `SETUP.md` waits for Phase 1. Writing click-by-click setup instructions for a flow that does not exist yet would be fiction, and it would be wrong by the time it mattered. `TROUBLESHOOTING.md` exists now because the §3 failure modes are already verified and independent of the code.
 
-### Phase 1 — The spine 🔜 *next (~14 units)*
+### Phase 1 — The spine ✅ *code-complete (~14 units)*
 
-When this phase ends, **the product works**: paste a TikTok link containing a YouTube URL, and the video is in the playlist.
+**The product works**: paste a TikTok caption containing a YouTube URL and the video is in the playlist, deduplicated, with quota accounted for.
 
 | # | Work | Blocked on console? |
 |---|---|---|
-| 1.1 | Project scaffold: pnpm, TS strict, Biome, Vitest, Hono, Drizzle, wrangler config | no |
-| 1.2 | **Tier 0 URL extractor + exhaustive fixture suite** — the highest-value code in the repo | no |
-| 1.3 | Schema + migrations: `accounts`, `items`, `jobs`, `quota_ledger`, `video_cache`, `rate_limits` | no |
-| 1.4 | Ports & adapters: `Clock`, `KeyValue`, `Db`, `YouTubePort`, `LlmPort`, `Notifier` | no |
-| 1.5 | **Fixture YouTube client** — recorded responses, quota accounting, injectable failures (`invalid_grant`, `quotaExceeded`, private/deleted video) | no |
-| 1.6 | Token vault: AES-GCM encryption at rest via WebCrypto, rotation-aware | no |
-| 1.7 | OAuth flow: `/auth/start`, `/auth/callback`, PKCE, state, refresh, `invalid_grant` → `reauth_required` | **yes — Batch 1** |
-| 1.8 | Playlist resolver: find-or-create, cache the ID, never assume it exists | yes (real run only) |
-| 1.9 | `POST /api/ingest`: bearer auth, rate limit, idempotency key, 202, `waitUntil` dispatch | no |
-| 1.10 | Pipeline runner + quota gate + dedupe (both DB-side and playlist-side) | no |
-| 1.11 | Web paste box + result view (also the debugging tool) | no |
-| 1.12 | Structured logging with request IDs | no |
-| 1.13 | CI: lint, typecheck, test, gitleaks secret scan | no |
-| 1.14 | `SETUP.md` for the local/SOLO path, written and then read as a stranger | no |
+| ✅ 1.1 | Project scaffold: pnpm, TS strict, Biome, Vitest, Hono, Drizzle, wrangler config | no |
+| ✅ 1.2 | **Tier 0 URL extractor + exhaustive fixture suite** — the highest-value code in the repo | no |
+| ✅ 1.3 | Schema + migrations: `accounts`, `items`, `jobs`, `quota_ledger`, `video_cache`, `rate_limits` | no |
+| ✅ 1.4 | Ports & adapters: `Clock`, `KeyValue`, `Db`, `YouTubePort`, `LlmPort`, `Notifier` | no |
+| ✅ 1.5 | **Fixture YouTube client** — recorded responses, quota accounting, injectable failures (`invalid_grant`, `quotaExceeded`, private/deleted video) | no |
+| ✅ 1.6 | Token vault: AES-GCM encryption at rest via WebCrypto, rotation-aware | no |
+| ⚠️ 1.7 | OAuth flow: `/auth/start`, `/auth/callback`, PKCE, state, refresh, `invalid_grant` → `reauth_required` | **yes — Batch 1** |
+| ✅ 1.8 | Playlist resolver: find-or-create, cache the ID, never assume it exists | yes (real run only) |
+| ✅ 1.9 | `POST /api/ingest`: bearer auth, rate limit, idempotency key, 202, `waitUntil` dispatch | no |
+| ✅ 1.10 | Pipeline runner + quota gate + dedupe (both DB-side and playlist-side) | no |
+| ✅ 1.11 | Web paste box + result view (also the debugging tool) | no |
+| ✅ 1.12 | Structured logging with request IDs | no |
+| ✅ 1.13 | CI: lint, typecheck, test, gitleaks secret scan | no |
+| ✅ 1.14 | `SETUP.md` for the local/SOLO path, written and then read as a stranger | no |
 
-Only **1.7** truly needs the console, and **1.5** exists so that 1.7's logic — including both failure paths that matter — is fully built and tested before the credentials arrive. Nothing else in Phase 1 blocks.
+Only **1.7** needed the console, and it is written and unit-tested against a stubbed Google token endpoint — every branch including `invalid_grant`, token rotation, and transient failure. What it has not done is complete one real round-trip with Google, which is the ⚠️ above and is waiting on [Batch 1](docs/ACTION-REQUIRED.md).
+
+**What was verified, and how:**
+
+- 296 tests, zero credentials, zero network. The fixture client is the only YouTube implementation wired into the test container.
+- The real server was booted and driven over HTTP end to end: connect, share, re-share, dedupe, quota meter, PWA share target, structured logs.
+- The Worker entry bundles for `workerd` via `wrangler deploy --dry-run`, which is the check that keeps ADR-0001's two-target promise honest — it fails if a `node:` API leaks into shared code.
+
+**Two bugs the tests found, both worth recording:**
+
+1. `RETURNING *` in the raw job-claim SQL returned snake_case columns, so `job.itemId` was always undefined and every job failed as malformed. Columns are now explicitly aliased.
+2. The ingest rate-limit bucket was keyed on the *presented* token, so an attacker rotating tokens got a fresh allowance per guess — defeating the control entirely. It is now a single bucket, evaluated before authentication.
+
+**And one found by following `SETUP.md` literally**, which is exactly why that is worth doing: re-pasting an identical link reported "1 saved" a second time. Accurate (the video *is* saved) and misleading (it reads as a fresh save). Now distinguishes "Already shared" from "already in the playlist" from "saved".
 
 ### Phase 2 — Ingress *(~9 units)*
 
@@ -173,9 +188,9 @@ Tracked against §11 of the brief. Nothing here is checked until it has actually
 - [ ] Stranger goes fork → first saved video in under 15 minutes
 - [ ] TikTok containing a YouTube link, shared from a phone, lands in the playlist — ≤3 taps, no waiting
 - [ ] Reel whose caption *describes* a video resolves, or is honestly held for review
-- [ ] Duplicates never double-add
-- [ ] Token expiry produces a notification and a working one-tap re-auth — not silence
-- [ ] Quota exhaustion queues and retries — never drops
+- [x] Duplicates never double-add — enforced by `UNIQUE(account_id, video_id)`, tested at both layers
+- [x] Token expiry produces a notification and a working one-tap re-auth — not silence *(verified against a stubbed token endpoint; the live round-trip awaits Batch 1)*
+- [x] Quota exhaustion queues and retries — never drops, and does not consume a retry attempt
 - [x] README states the Watch Later limitation plainly, above the fold
 - [ ] `docker compose up` works from a clean checkout with only `.env` filled in
 - [x] Zero secrets in git history

@@ -61,6 +61,14 @@ export interface FixtureYouTubeClient extends YouTubeClient {
   /** Make the next matching call fail. */
   failNext(failure: InjectedFailure): void;
   addFixtureVideo(video: FixtureVideo): void;
+  /**
+   * Simulate the user deleting the playlist in the YouTube app.
+   *
+   * Removes it from both the listing and the contents, so a subsequent insert against the
+   * cached ID fails with `not_found` exactly as the real API would — which is what exercises
+   * the find-or-create heal path.
+   */
+  removePlaylist(playlistId: string): void;
   reset(): void;
 }
 
@@ -196,6 +204,11 @@ export function createFixtureYouTubeClient(
 
     addFixtureVideo(video) {
       videos.set(video.videoId, video);
+    },
+
+    removePlaylist(playlistId) {
+      playlists = playlists.filter((playlist) => playlist.id !== playlistId);
+      playlistContents.delete(playlistId);
     },
 
     reset() {
