@@ -1,0 +1,54 @@
+name: Idea or feature request
+description: Something Later could do that it does not.
+labels: ['idea']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Please read the anti-goals first:
+        [PLAN.md § Anti-goals](https://github.com/alepotger/Later/blob/main/PLAN.md#anti-goals--deliberately-not-built).**
+
+        Some things are deliberately not built, and "we already decided not to" is recorded there
+        with reasoning so nobody has to re-litigate it. Currently ruled out: a native app-store
+        app, user accounts beyond Google OAuth, any scraping that violates a platform's terms,
+        an "AI agent framework" abstraction, analytics or gamification, telemetry of any kind,
+        monetisation, and platforms beyond Instagram / TikTok / YouTube.
+
+        That list is not sacred — but changing it needs an argument, which is what this form is
+        for. Every significant decision also has an ADR in
+        [docs/adr/](https://github.com/alepotger/Later/tree/main/docs/adr) ending in a
+        **"Revisit if"** section, which is the most direct way to make the case.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you actually trying to do?
+      description: >-
+        The underlying goal, not the proposed feature. Later exists to serve one sentence —
+        *scrolling Reels, see a recommended YouTube video, share, done, under three taps* — and
+        the most useful thing you can tell us is how your problem relates to that.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like it to do
+    validations:
+      required: true
+
+  - type: textarea
+    id: anti-goals
+    attributes:
+      label: Does this touch an anti-goal or an ADR?
+      description: >-
+        If it does, say which and why the reasoning does not apply to your case. That is a
+        completely legitimate argument to make — it just needs making explicitly.
+
+  - type: checkboxes
+    id: acknowledge
+    attributes:
+      label: Before you post
+      options:
+        - label: I have read the anti-goals list.
+          required: true

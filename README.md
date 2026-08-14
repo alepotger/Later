@@ -1,5 +1,9 @@
 # Later
 
+[![CI](https://github.com/alepotger/Later/actions/workflows/ci.yml/badge.svg)](https://github.com/alepotger/Later/actions/workflows/ci.yml)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![No telemetry](https://img.shields.io/badge/telemetry-none-brightgreen.svg)](SECURITY.md#no-telemetry)
+
 **You're scrolling Reels. A video recommends a YouTube video. Share → Later. It's in your playlist. Done.**
 
 Two taps, no waiting, no app store. Later is a small self-hosted service that takes whatever your phone's share sheet hands it, finds the YouTube video being recommended, and adds it to a YouTube playlist you own.
@@ -90,6 +94,18 @@ Later is built so that one person with no budget can run it: **Cloudflare Worker
 
 The button copies this repository into *your* GitHub account, creates the D1 database, and deploys. You still need your own Google OAuth client first — [Batch 1](docs/ACTION-REQUIRED.md) is the 15-minute console sitting that produces it.
 
+### "Can I just use your instance?"
+
+**There isn't one, and there won't be.** Not reluctance — the platform makes it impossible:
+
+- Google caps an unverified OAuth app at **100 users**. Getting past that needs a security assessment that can take weeks.
+- The **10,000-unit daily quota belongs to the Google Cloud project**, not the user. One shared instance means ~190 saved videos per *day, in total, across everyone* — about what one enthusiastic person uses alone.
+- Later refuses open registration by design. Even `MULTI` mode requires an explicit email allowlist, because a URL that anyone can find and attach their Google account to is not a feature ([ADR-0013](docs/adr/0013-solo-and-multi-modes.md)).
+
+So Later is self-hosted, and that is the point rather than a compromise. Your Google Cloud project, your OAuth client, your quota, your database, your playlist. Nobody — including me — can see what you save, because there is nowhere central for it to go.
+
+Deploying your own is one button and about 15 minutes, most of which is Google's console.
+
 Everything is yours: your Google Cloud project, your OAuth client, your keys, your data. Nothing is tied to the author's account, there is no hosted service, and there is **no telemetry of any kind** — not opt-out, just absent.
 
 **[SETUP.md](SETUP.md) walks you through it.** Step 0 takes two minutes and needs no credentials at all:
@@ -121,7 +137,16 @@ That runs the whole pipeline against recorded API responses, so you can see exac
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | The failure modes above, and how to get out of them |
 | [SECURITY.md](SECURITY.md) | Threat model, secret handling, reporting |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to work on this |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Be decent to people; the longer version |
+
+## Contributing
+
+Issues and pull requests are welcome. The most valuable report you can file is **a URL form Tier 0 failed to recognise** — it becomes a permanent test fixture, and it turns a 151-unit search back into a 51-unit save for everyone. There is [an issue template](.github/ISSUE_TEMPLATE/1-url-not-recognised.yml) just for that.
+
+Before proposing a feature, please read the [anti-goals](PLAN.md#anti-goals--deliberately-not-built). Some things are deliberately not built and the reasoning is written down, so nobody has to argue it twice. Arguing the reasoning is fair game; every ADR ends with a **"Revisit if"** section for exactly that.
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has the rules that actually matter — chiefly that the core stays pure, that nothing calls YouTube without declaring a quota cost, and that no low-confidence guess ever reaches someone's playlist.
 
 ## Licence
 
-[MIT](LICENSE).
+[MIT](LICENSE). Fork it, deploy it, change it, sell it — but if you redistribute it, keep the honesty about Watch Later. Someone will otherwise waste an afternoon finding out.

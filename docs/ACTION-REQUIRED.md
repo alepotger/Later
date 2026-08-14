@@ -679,3 +679,120 @@ This file is append-only, so the original stands above and the fix lives here.
 **Nothing to redo.** Registering the two `:3000` redirect URIs was harmless — a registered URI that never gets used costs nothing, and it means the port still works if you ever set it. Keep all four.
 
 Found by following `SETUP.md` from a clean clone and checking what the server actually printed, rather than what the docs claimed. `.env.example` and `TROUBLESHOOTING.md` have been corrected at the source.
+
+---
+
+## Batch 5 — Going public
+
+**Logged:** 2026-08-06 · **Needed before:** anyone else can find or use this
+**Estimated time:** ~10 minutes · **Waiting periods:** none
+**Blocks me?** Partly. Step 1 is the real blocker and only you can authorise it.
+
+### First, the thing that matters more than any step below
+
+**"Public repo" and "public instance" are different, and only one of them is on offer.**
+
+| | Public **repo** | Public **instance** |
+|---|---|---|
+| What it means | the code is open; anyone forks and deploys their own | your one deployment serves strangers |
+| Supported? | **yes — this is the whole design** | **no, and not because it wasn't built** |
+| Your `LATER_MODE` | stays `SOLO` | — |
+
+A shared public instance is blocked by the platform, not by missing code:
+
+- Google caps an **unverified OAuth app at 100 users**. Past that needs a security assessment measured in weeks.
+- The **10,000-unit daily quota belongs to the Google Cloud project**, so a shared instance is ~190 saved videos per day *in total across everyone* — roughly what one enthusiastic person uses alone.
+- Later refuses open registration by design. `MULTI` needs an explicit email allowlist and will not start without one ([ADR-0013](adr/0013-solo-and-multi-modes.md) rejected open registration explicitly).
+
+So: **publish the repo, keep your own instance `SOLO`.** `MULTI` is for putting your partner or a flatmate on your instance — it is not the "public" switch.
+
+---
+
+### Step 1 — Merge the work onto `main` (2 min) ← the actual blocker
+
+**Right now `github.com/alepotger/Later` is public and shows one file: a `README.md` containing the line `# Later`.** Every commit of actual work is on the branch `claude/later-project-setup-k1bagd`. Anyone who finds the repo today finds nothing.
+
+I have not merged it, because pushing to a branch other than the one I was assigned needs your explicit say-so.
+
+**Either tell me "merge it to main" and I will**, or do it yourself:
+
+```bash
+git checkout main
+git pull
+git merge --no-ff claude/later-project-setup-k1bagd
+git push origin main
+```
+
+> **You'll know this worked when** `github.com/alepotger/Later` shows the full README with the CI badge, and the file list includes `src/`, `SETUP.md`, and `DEPLOY.md`.
+
+One wrinkle: `main`'s single-line README and the branch's README are the same file, so git will report a conflict. Take the branch's version wholesale — `git checkout --theirs README.md && git add README.md`.
+
+---
+
+### Step 2 — Set the repo description and topics (2 min)
+
+Go to **https://github.com/alepotger/Later** and click the **gear icon** next to "About" on the right.
+
+**Description** — copy exactly:
+
+```
+Share a Reel or TikTok, get the YouTube video it recommends saved to a playlist. Self-hosted, no telemetry, deploys free.
+```
+
+**Topics** — add these one at a time:
+
+```
+youtube  youtube-api  self-hosted  cloudflare-workers  typescript  hono  pwa  telegram-bot  ios-shortcuts  share-target
+```
+
+Tick **"Releases"** and **"Packages"** off if you like; leave **"Use your GitHub Pages website"** unticked.
+
+> **You'll know this worked when** the sidebar shows the description and a row of blue topic tags.
+
+---
+
+### Step 3 — Turn on private vulnerability reporting (1 min)
+
+`SECURITY.md` tells people to report vulnerabilities privately through GitHub. That button does not exist until you enable it, so right now the instruction points at nothing.
+
+1. **https://github.com/alepotger/Later/settings/security_analysis**
+2. Find **"Private vulnerability reporting"**
+3. Click **"Enable"**
+
+> **You'll know this worked when** **https://github.com/alepotger/Later/security/advisories/new** loads a form instead of a 404. That is the exact URL the issue templates link to.
+
+---
+
+### Step 4 — Check the issue templates render (1 min)
+
+1. **https://github.com/alepotger/Later/issues/new/choose**
+2. You should see four templates — Tier 0 URL bug, bug report, setup help, idea — plus four links out to TROUBLESHOOTING, SETUP, the security form, and the Watch Later explanation.
+
+> **You'll know this worked when** the chooser lists all four and none of the links 404. If you see a plain blank text box instead, the templates did not reach `main` — go back to step 1.
+
+---
+
+### Step 5 — Decide about a release tag (2 min, optional)
+
+A tag gives people something to pin to and a "Releases" entry on the sidebar. My recommendation: **wait.** Tag `v0.1.0` after you have completed Batch 4 and personally watched a real video land in a real playlist. Tagging software that has never run against real Google credentials invites strangers to be your first integration test.
+
+When you are ready:
+
+```bash
+git tag -a v0.1.0 -m "First working release"
+git push origin v0.1.0
+```
+
+---
+
+### Do NOT do these
+
+- **Do not request Google OAuth verification.** It only removes the "unverified app" warning and the 100-user cap, neither of which matters when everyone runs their own instance. It can take weeks and may require a paid security assessment.
+- **Do not set `LATER_MODE=MULTI` to "make it public".** It does not do that. It adds an email allowlist for people you name.
+- **Do not put your deployed URL in the README.** It is a personal instance with your quota and your playlist behind it, and a public URL invites exactly the traffic it cannot serve.
+
+### Batch 5 done — what to tell me
+
+1. **"Batch 5 done"**, or **"merge it to main"** if you want me to do step 1
+2. Whether the issue chooser rendered all four templates
+3. Anything in the README that reads wrong to you now that it is the front page of a public project — that is the one thing I cannot judge from inside the repo

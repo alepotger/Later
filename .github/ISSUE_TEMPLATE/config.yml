@@ -1,0 +1,24 @@
+# Blank issues stay enabled. A form that does not fit is worse than no form, and someone
+# with an unusual problem should not have to fight a template to report it.
+blank_issues_enabled: true
+
+contact_links:
+  - name: Something stopped working — read this first
+    url: https://github.com/alepotger/Later/blob/main/TROUBLESHOOTING.md
+    about: >-
+      Ordered by likelihood. If it worked for about a week and then stopped, the first entry
+      is almost certainly your answer and it is not a bug.
+
+  - name: Setting it up
+    url: https://github.com/alepotger/Later/blob/main/SETUP.md
+    about: Local setup. For deploying, see DEPLOY.md. Google Cloud steps are in docs/ACTION-REQUIRED.md.
+
+  - name: Report a security vulnerability — privately
+    url: https://github.com/alepotger/Later/security/advisories/new
+    about: >-
+      Please do not open a public issue for anything exploitable. Later holds an OAuth token
+      that can modify a YouTube account.
+
+  - name: Why doesn't it write to my real Watch Later?
+    url: https://github.com/alepotger/Later#read-this-first-later-cannot-write-to-your-real-watch-later
+    about: Google closed API access to Watch Later in 2016. This is not fixable and will not be worked around.
