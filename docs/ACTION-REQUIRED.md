@@ -796,3 +796,15 @@ git push origin v0.1.0
 1. **"Batch 5 done"**, or **"merge it to main"** if you want me to do step 1
 2. Whether the issue chooser rendered all four templates
 3. Anything in the README that reads wrong to you now that it is the front page of a public project — that is the one thing I cannot judge from inside the repo
+
+---
+
+## Status note — Batch 5 step 1 is done
+
+**2026-08-06.** You authorised the merge and it is done: `main` is now `ceef534`, carrying all 130 files. `github.com/alepotger/Later` shows the real project instead of a one-line README.
+
+Steps 2, 3 and 4 of Batch 5 are still yours — repo description and topics, private vulnerability reporting, and eyeballing the issue chooser. None of them blocks anything; the repo is usable by a stranger right now without them.
+
+**Step 3 is the one with a real consequence if skipped.** `SECURITY.md` and all four issue templates point at `/security/advisories/new`, and that URL 404s until private vulnerability reporting is switched on. Someone with a genuine vulnerability currently has nowhere private to send it, which is worse than having said nothing.
+
+Step 5 — the release tag — still reads **wait**, for the same reason as before: nothing here has run against real Google credentials yet. Batch 4 first.
