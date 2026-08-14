@@ -1,0 +1,65 @@
+name: A URL was not recognised (Tier 0 bug)
+description: You shared something with a YouTube link in it and Later did not find the link.
+title: 'Tier 0: '
+labels: ['tier-0', 'bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **This is the most valuable bug report you can file, and the cheapest to fix.**
+
+        Tier 0 is the regex that finds a YouTube URL in shared text. When it works, a share
+        costs 51 units of your daily quota. When it misses, the same share falls through to a
+        search and costs 151 — three times the price, for something that should have been free.
+
+        Every report here becomes a permanent fixture in `tests/core/urls/fixtures.ts`, so the
+        same URL form can never regress.
+
+  - type: textarea
+    id: shared
+    attributes:
+      label: The exact text you shared
+      description: >-
+        Paste it verbatim, including any surrounding caption. Whitespace and punctuation are
+        often the whole bug, so please do not tidy it up.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: expected
+    attributes:
+      label: The video ID it should have found
+      placeholder: dQw4w9WgXcQ
+    validations:
+      required: true
+
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: What happened instead
+      options:
+        - No video found at all (unresolvable)
+        - It found a different video
+        - It went to the review inbox
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Where you shared it from
+      placeholder: iOS Shortcut / Telegram / Android PWA / web paste box / curl
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: secrets
+    attributes:
+      label: Before you post
+      options:
+        - label: >-
+            I have not pasted `INGEST_TOKEN`, `TOKEN_ENCRYPTION_KEY`, `GOOGLE_CLIENT_SECRET`,
+            `SESSION_SECRET`, or a refresh token. Nobody needs them to help me.
+          required: true

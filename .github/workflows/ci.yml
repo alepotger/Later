@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege: nothing here needs to write to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, typecheck, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Format
+        run: pnpm run format:check
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Test
+        run: pnpm run test:run
+
+      # Migrations are generated, not hand-written. If the schema changed without regenerating
+      # them, the deployed database would silently not match the code.
+      - name: Migrations are up to date with the schema
+        run: |
+          pnpm run db:generate
+          if ! git diff --quiet -- drizzle; then
+            echo "::error::src/db/schema.ts changed without regenerating migrations. Run 'pnpm db:generate' and commit the result."
+            git --no-pager diff --stat -- drizzle
+            exit 1
+          fi
+
+  build:
+    name: Both deploy targets build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Node bundle (self-host target)
+        run: pnpm run build
+
+      # The load-bearing portability check. Bundling the Worker entry for workerd fails if any
+      # `node:` API or Node-only dependency has leaked into shared code — which is the single
+      # most likely way the two-target promise in ADR-0001 quietly stops being true.
+      - name: Worker bundle (Cloudflare target)
+        run: pnpm exec wrangler deploy --dry-run --outdir /tmp/worker-build
+        env:
+          # Later collects no telemetry; opt its build tooling out too.
+          WRANGLER_SEND_METRICS: 'false'
+
+  docker:
+    name: Docker image builds and runs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t later:ci .
+
+      # Building is not enough: the runtime stage carries a pnpm symlink tree, a native SQLite
+      # binding and a bundled ESM entry point, and any of the three can be wrong in a way that
+      # only shows at startup. So actually start it and ask it a question.
+      - name: Start it in fixtures mode
+        run: |
+          docker run -d --name later-ci -p 8787:8787 \
+            -e USE_FIXTURES=true \
+            -e PUBLIC_BASE_URL=http://localhost:8787 \
+            later:ci
+
+      - name: It answers /healthz
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://localhost:8787/healthz | tee /tmp/health | grep -q '"ok":true'; then
+              echo "healthy after ${attempt}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::container never became healthy"
+          docker logs later-ci
+          exit 1
+
+      - name: It accepts a share and resolves it
+        run: |
+          curl -fsS "http://localhost:8787/auth/start" -o /dev/null
+          curl -fsS -X POST http://localhost:8787/api/ingest \
+            -H 'authorization: Bearer fixtures-mode-placeholder-not-a-secret' \
+            -H 'content-type: application/json' \
+            -d '{"text":"https://youtu.be/dQw4w9WgXcQ"}' | tee /tmp/ingest
+          grep -q '"videoId":"dQw4w9WgXcQ"' /tmp/ingest
+
+      - name: Container logs
+        if: always()
+        run: docker logs later-ci
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: "no secrets in git history" cannot be shown by scanning a diff.
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          VERSION=8.28.0
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Scan full history
+        run: gitleaks detect --source . --redact --verbose --exit-code 1

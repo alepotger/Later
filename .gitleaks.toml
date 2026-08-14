@@ -1,0 +1,33 @@
+# gitleaks configuration.
+#
+# CI scans the FULL git history, not just the diff — "zero secrets in git history" is a claim
+# a diff scan cannot support.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documentation placeholders and example values, none of which work"
+
+paths = [
+  # Every value here is empty by design; the file exists to document the variables.
+  '''\.env\.example''',
+  # Setup docs quote credential *shapes* (GOCSPX-, .apps.googleusercontent.com) so a deployer
+  # can tell they copied the right field.
+  '''docs/ACTION-REQUIRED\.md''',
+  '''SETUP\.md''',
+  '''TROUBLESHOOTING\.md''',
+  '''SECURITY\.md''',
+  '''docs/adr/.*\.md''',
+]
+
+regexes = [
+  # Deliberately fake values used in tests and fixtures.
+  '''fixtures-mode-placeholder-not-a-secret''',
+  '''test-ingest-token-long-enough-to-pass-validation''',
+  '''GOCSPX-example''',
+  '''stored-refresh-token''',
+  '''fixtures-refresh-token''',
+  # The RFC 4231 HMAC-SHA256 test vector, which is a published constant.
+  '''b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7''',
+]

@@ -1,0 +1,55 @@
+{
+  "name": "later",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Share a Reel or TikTok, and the YouTube video it recommends lands in your playlist.",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test:run",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "fix": "biome check --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "dev": "tsx watch src/entry/node.ts",
+    "dev:worker": "wrangler dev",
+    "build": "esbuild src/entry/node.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/later.js --external:better-sqlite3 --banner:js=\"import{createRequire}from'node:module';const require=createRequire(import.meta.url);\"",
+    "start": "node dist/later.js",
+    "db:generate": "drizzle-kit generate",
+    "db:apply:remote": "wrangler d1 migrations apply later-db --remote",
+    "deploy": "wrangler d1 migrations apply later-db --remote && wrangler deploy"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.0",
+    "better-sqlite3": "13.0.3",
+    "drizzle-orm": "0.45.2",
+    "hono": "4.13.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.7",
+    "@cloudflare/workers-types": "5.20260804.1",
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "22.18.12",
+    "drizzle-kit": "0.31.10",
+    "esbuild": "0.28.1",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10",
+    "wrangler": "4.119.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild",
+      "@biomejs/biome",
+      "workerd"
+    ]
+  }
+}

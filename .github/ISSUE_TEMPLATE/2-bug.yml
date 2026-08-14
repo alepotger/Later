@@ -1,0 +1,70 @@
+name: Bug report
+description: Something behaves differently from what the docs say it will.
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Please check [TROUBLESHOOTING.md](https://github.com/alepotger/Later/blob/main/TROUBLESHOOTING.md)
+        first.** It is ordered by likelihood, and the first entry — "it worked for a week, then
+        stopped" — accounts for most reports. That one is Google revoking your token after 7 days
+        because your OAuth app is in Testing status, and it is not a bug in Later.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce it
+      description: >-
+        If it reproduces with `USE_FIXTURES=true`, say so — that means no credentials are needed
+        to see it and it will be fixed much faster.
+    validations:
+      required: true
+
+  - type: input
+    id: item-state
+    attributes:
+      label: The item's state in the web UI
+      description: >-
+        The badge next to the share — saved, queued, needs review, no video found, unavailable,
+        waiting for quota, waiting for reconnect, or failed.
+      placeholder: e.g. waiting for quota
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines, with the request ID
+      description: >-
+        Every request has an `x-request-id`, and it ties the whole pipeline run together. Redact
+        anything you are unsure about — **never paste a token or a client secret.**
+      render: text
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: Values only, never secrets.
+      value: |
+        LATER_MODE:
+        LLM_PROVIDER:
+        GOOGLE_OAUTH_PUBLISHING_STATUS:
+        Deploy target (Cloudflare / Docker / local Node):
+        Version or commit:
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: secrets
+    attributes:
+      label: Before you post
+      options:
+        - label: >-
+            I have not pasted `INGEST_TOKEN`, `TOKEN_ENCRYPTION_KEY`, `GOOGLE_CLIENT_SECRET`,
+            `SESSION_SECRET`, or a refresh token.
+          required: true

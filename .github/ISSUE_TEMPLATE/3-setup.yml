@@ -1,0 +1,43 @@
+name: I got stuck setting it up
+description: A step in SETUP.md, DEPLOY.md, or ACTION-REQUIRED.md did not work.
+labels: ['setup']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **This counts as a bug.** The target is fork to first saved video in under 15 minutes,
+        and a step that takes longer than it should, or a label that does not match what you see
+        on screen, is a defect in the docs rather than a mistake you made.
+
+        Google also renames its console regularly, so instructions rot without anyone touching
+        them. Reports like this are the only way that gets caught.
+
+  - type: input
+    id: step
+    attributes:
+      label: Which step
+      placeholder: e.g. ACTION-REQUIRED Batch 1 step 4, or SETUP.md Step 3
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-vs-seen
+    attributes:
+      label: What the docs said, and what you actually saw
+      description: >-
+        If a button or menu label differs from what is written, quoting the real label is the
+        whole fix. Screenshots welcome — check them for your email address and any secrets first.
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Any error message, verbatim
+      render: text
+
+  - type: input
+    id: environment
+    attributes:
+      label: Where you are running it
+      placeholder: macOS + local Node / Cloudflare Workers / Docker on Debian
