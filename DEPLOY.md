@@ -24,31 +24,46 @@ The button copies this repository into *your* GitHub account, creates the D1 dat
 
 Then follow **[Batch 4](docs/ACTION-REQUIRED.md#batch-4--deploy)**, which has the exact click path, the two secrets you must set afterwards, and the redirect URI you have to add to your OAuth client.
 
-### Or from the command line
+### Or from the command line — two commands
 
 ```bash
 pnpm install
-npx wrangler login
-npx wrangler d1 create later-db          # copy the database_id it prints into wrangler.jsonc
+pnpm setup                     # generates your three secrets into .env
+# paste GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET into .env — see ACTION-REQUIRED Batch 1
 
-npx wrangler secret put GOOGLE_CLIENT_ID
-npx wrangler secret put GOOGLE_CLIENT_SECRET
-npx wrangler secret put INGEST_TOKEN     # SOLO only; MULTI mints per-account tokens
-npx wrangler secret put TOKEN_ENCRYPTION_KEY
-npx wrangler secret put SESSION_SECRET
-
-pnpm run deploy                          # applies migrations, then deploys
+pnpm exec wrangler login       # opens a browser, once
+pnpm deploy:cloudflare
 ```
 
-`pnpm run deploy` runs `wrangler d1 migrations apply later-db --remote` before `wrangler deploy`, in that order deliberately: a Worker live against a database missing a column fails every request, while a database ahead of the code is harmless.
+`pnpm deploy:cloudflare` does everything a machine can: creates the D1 database, writes its real ID into `wrangler.jsonc`, uploads your five secrets from `.env`, applies migrations, deploys, reads back the `workers.dev` origin, redeploys with `PUBLIC_BASE_URL` set to it, and checks `/healthz`. Then it prints the one URI you must register with Google.
 
-Afterwards, set `PUBLIC_BASE_URL` to the deployed origin — it is used to build the OAuth redirect URI, and Google requires a byte-exact match:
+It is safe to re-run — it skips anything already done rather than duplicating it, and it will never overwrite a `database_id` that is already real.
+
+**Two things it deliberately does not do**, because both are browser sessions with accounts that are yours:
+
+- `wrangler login` — the Cloudflare handshake
+- registering the redirect URI on your Google OAuth client
+
+Migrations are applied *before* the deploy, and that order is not cosmetic: a Worker live against a database missing a column fails every request, while a database ahead of the code is harmless.
+
+<details>
+<summary>Doing it by hand instead</summary>
 
 ```bash
-npx wrangler deploy --var PUBLIC_BASE_URL:https://later.<your-subdomain>.workers.dev
+pnpm exec wrangler login
+pnpm exec wrangler d1 create later-db      # copy the database_id into wrangler.jsonc
+
+pnpm exec wrangler secret put GOOGLE_CLIENT_ID
+pnpm exec wrangler secret put GOOGLE_CLIENT_SECRET
+pnpm exec wrangler secret put INGEST_TOKEN         # SOLO only; MULTI mints per-account tokens
+pnpm exec wrangler secret put TOKEN_ENCRYPTION_KEY
+pnpm exec wrangler secret put SESSION_SECRET
+
+pnpm run deploy                                     # migrations, then deploy
+pnpm exec wrangler deploy --var PUBLIC_BASE_URL:https://later.<your-subdomain>.workers.dev
 ```
 
-or add it to the `vars` block in `wrangler.jsonc` and redeploy.
+</details>
 
 ### What the free tier gives you
 
@@ -60,7 +75,8 @@ or add it to the `vars` block in `wrangler.jsonc` and redeploy.
 
 ```bash
 git clone https://github.com/alepotger/Later.git && cd Later
-cp .env.example .env      # fill in the five required values — see SETUP.md Step 2
+pnpm setup                # generates .env and your three secrets
+# paste GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET into .env
 docker compose up -d --build
 ```
 

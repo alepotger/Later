@@ -116,6 +116,8 @@ pnpm install
 USE_FIXTURES=true pnpm dev
 ```
 
+When you want the real thing, `pnpm setup` generates your secrets and `pnpm deploy:cloudflare` does the whole Cloudflare deploy. The only parts left for a human are the two browser sessions nobody can do on your behalf: creating a Google OAuth client, and registering the redirect URI against it.
+
 That runs the whole pipeline against recorded API responses, so you can see exactly what Later does before deciding whether to set up a Google Cloud project. The console work, when you want it, is batched into one ~15-minute sitting in **[docs/ACTION-REQUIRED.md](docs/ACTION-REQUIRED.md)**.
 
 ### Two things that will bite you, documented up front

@@ -24,7 +24,9 @@
     "start": "node dist/later.js",
     "db:generate": "drizzle-kit generate",
     "db:apply:remote": "wrangler d1 migrations apply later-db --remote",
-    "deploy": "wrangler d1 migrations apply later-db --remote && wrangler deploy"
+    "deploy": "wrangler d1 migrations apply later-db --remote && wrangler deploy",
+    "setup": "node scripts/setup.mjs",
+    "deploy:cloudflare": "bash scripts/deploy-cloudflare.sh"
   },
   "dependencies": {
     "@hono/node-server": "2.1.0",

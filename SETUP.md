@@ -58,24 +58,29 @@ Later will warn you constantly if you choose Testing, and will notify you with a
 ## Step 2 — Configure
 
 ```bash
-cp .env.example .env
+pnpm setup
 ```
 
-Fill in the five required values. Every variable is documented inline in the file.
+That creates `.env` and generates the three secrets — `INGEST_TOKEN`, `TOKEN_ENCRYPTION_KEY`, `SESSION_SECRET` — directly into it. They are pure entropy; there was never a reason for you to run `openssl` three times and paste the results into the right lines.
+
+It is safe to re-run and **never overwrites a value that is already set**. That matters most for `TOKEN_ENCRYPTION_KEY`: replacing it is the difference between your stored Google token still decrypting and everyone having to re-authorise.
+
+Two values remain, and no script can produce them, because they only exist inside your own Google account:
 
 | Variable | Where it comes from |
 |---|---|
 | `GOOGLE_CLIENT_ID` | Batch 1 step 7 — ends in `.apps.googleusercontent.com` |
 | `GOOGLE_CLIENT_SECRET` | Batch 1 step 7 — starts with `GOCSPX-` |
-| `INGEST_TOKEN` | `openssl rand -base64 32 \| tr '+/' '-_' \| tr -d '='` (SOLO only) |
-| `TOKEN_ENCRYPTION_KEY` | `openssl rand -base64 32` |
-| `SESSION_SECRET` | `openssl rand -base64 32` |
+
+Open `.env` and paste those two in. Every other variable is documented inline and has a working default.
 
 Plus, if you published to Production in step 1:
 
 ```dotenv
 GOOGLE_OAUTH_PUBLISHING_STATUS=production
 ```
+
+In `MULTI` mode `INGEST_TOKEN` is ignored — each account mints its own from the web UI — but `pnpm setup` generates it anyway, so switching modes later needs no extra step.
 
 **Keep `TOKEN_ENCRYPTION_KEY` somewhere safe.** It decrypts your stored Google token. Lose it and you re-authorise; there's no other consequence, but it's avoidable annoyance.
 
@@ -198,11 +203,13 @@ Current state is always in [PLAN.md](PLAN.md).
 
 | | |
 |---|---|
+| `pnpm setup` | Create `.env` and generate the three secrets |
 | `pnpm dev` | Run locally with reload |
 | `USE_FIXTURES=true pnpm dev` | Run with no credentials, against recorded responses |
 | `pnpm check` | Format, lint, typecheck, test |
 | `pnpm test` | Tests in watch mode |
 | `pnpm db:generate` | Regenerate migrations after a schema change |
+| `pnpm deploy:cloudflare` | Scripted deploy: D1, secrets, migrations, `PUBLIC_BASE_URL` |
 
 **Endpoints**
 
