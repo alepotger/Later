@@ -808,3 +808,39 @@ Steps 2, 3 and 4 of Batch 5 are still yours — repo description and topics, pri
 **Step 3 is the one with a real consequence if skipped.** `SECURITY.md` and all four issue templates point at `/security/advisories/new`, and that URL 404s until private vulnerability reporting is switched on. Someone with a genuine vulnerability currently has nowhere private to send it, which is worse than having said nothing.
 
 Step 5 — the release tag — still reads **wait**, for the same reason as before: nothing here has run against real Google credentials yet. Batch 4 first.
+
+---
+
+## Automation note — 2026-08-14
+
+Two batches got shorter. Neither is superseded; the manual steps above still work and are still correct if you prefer them.
+
+**Batch 1 step 9** — generating `INGEST_TOKEN`, `TOKEN_ENCRYPTION_KEY` and `SESSION_SECRET` — is now:
+
+```bash
+pnpm setup
+```
+
+It creates `.env` from `.env.example`, generates all three into it, and prints what is still missing. Safe to re-run: it never overwrites a value that is already set, which matters most for `TOKEN_ENCRYPTION_KEY` — replacing that one is the difference between your stored Google token still decrypting and re-authorising from scratch.
+
+**Batch 4 option A steps A2, A3 and part of A5** are now:
+
+```bash
+pnpm exec wrangler login     # browser, once
+pnpm deploy:cloudflare
+```
+
+That creates the D1 database, writes its ID into `wrangler.jsonc`, uploads the five secrets from `.env`, applies migrations, deploys, reads the `workers.dev` origin back out, redeploys with `PUBLIC_BASE_URL` set to it, checks `/healthz`, and prints your exact redirect URI. Safe to re-run.
+
+### What is left, and why it cannot be automated
+
+Four things, all of them a browser session against an account that is yours and that I hold no credentials for. §9 of the brief forbids guessing or fabricating any of it, so none of this is quietly assumed done anywhere in this repo:
+
+| | Why only you can do it |
+|---|---|
+| **Batch 1** — create the Google Cloud project and OAuth client | It lives inside your Google account. There is no API to create an OAuth client; the console is the only route, by Google's design. |
+| **Publish the OAuth app to Production** | Same console, same reason. Skip it and Google deletes your refresh token in exactly 7 days. |
+| **Register the redirect URI** | Same console. `pnpm deploy:cloudflare` prints the exact string to paste, because it is the only party that knows your deployed hostname. |
+| **`wrangler login`** | An OAuth handshake with your Cloudflare account. |
+
+Everything else in this project now runs from a command line.
