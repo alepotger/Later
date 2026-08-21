@@ -844,3 +844,19 @@ Four things, all of them a browser session against an account that is yours and 
 | **`wrangler login`** | An OAuth handshake with your Cloudflare account. |
 
 Everything else in this project now runs from a command line.
+
+---
+
+## Correction to Batch 4 — 2026-08-14
+
+**Batch 4 option A step A3 was incomplete, and quietly so.** It had you set five secrets and `PUBLIC_BASE_URL` in the Cloudflare dashboard. That is not everything Later reads.
+
+`wrangler deploy` does not read `.env`. Anything else you configured locally — publishing status, Telegram, a Gemini key, `LATER_MODE`, the playlist name, the confidence threshold — was never reaching the Worker, which used the defaults in `wrangler.jsonc` instead. Nothing errored; it just silently was not your configuration.
+
+The most likely way you would have hit this: publishing your OAuth app to Production, setting `GOOGLE_OAUTH_PUBLISHING_STATUS=production` in `.env`, and then watching the deployment keep insisting authorisation expires in 7 days. A false warning is worse than none — it is the exact mechanism meant to protect you, and one that cries wolf gets ignored.
+
+**Fixed at the source.** `pnpm deploy:cloudflare` now sends every key in `.env`: secrets via `wrangler secret put`, everything else via `--var`. The key list is read from `.env.example` at run time rather than copied into the script, so a new config option carries through automatically instead of being forgotten. A key in your `.env` that `.env.example` does not define is now flagged rather than dropped silently.
+
+**If you already deployed by hand**, add this one variable — dashboard: **Workers & Pages** → **later** → **Settings** → **Variables and Secrets** → **Add**, type **Text**, name `GOOGLE_OAUTH_PUBLISHING_STATUS`, value `production`, then **Deploy**. Or just re-run `pnpm deploy:cloudflare`, which is idempotent and fixes every variable at once.
+
+**If you have not deployed yet**, there is nothing to do. Set the values in `.env` and run the script.

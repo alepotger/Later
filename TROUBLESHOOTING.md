@@ -73,6 +73,32 @@ The 10,000-unit default belongs to your Google Cloud *project*, not to you or to
 
 ---
 
+## "I set it in `.env` but the deployed Worker ignores it"
+
+**Cloudflare only.** `wrangler deploy` does not read `.env` — never has. A bare `wrangler deploy` uses whatever is baked into `wrangler.jsonc`, so anything you changed locally silently does not apply.
+
+The usual symptom is a deployment that keeps warning **"authorisation will expire in 7 days"** after you published your OAuth app to Production and set `GOOGLE_OAUTH_PUBLISHING_STATUS=production`. The warning is wrong, and the cure is to send the value:
+
+```bash
+pnpm deploy:cloudflare
+```
+
+That reads your whole `.env` and sends every key — secrets via `wrangler secret put`, everything else via `--var`. See [DEPLOY.md](DEPLOY.md#how-env-reaches-a-worker).
+
+**Already deployed and just want the one variable changed?** Either:
+
+```bash
+pnpm exec wrangler deploy --var GOOGLE_OAUTH_PUBLISHING_STATUS:production
+```
+
+or in the dashboard: **Workers & Pages** → **later** → **Settings** → **Variables and Secrets** → **Add** → type **Text**, name `GOOGLE_OAUTH_PUBLISHING_STATUS`, value `production` → **Deploy**.
+
+The dashboard edit is overwritten by the next `wrangler deploy` that does not pass the same value, so fix `.env` and re-run the script if you want it to stick.
+
+**This does not affect Docker or local Node** — both read `.env` directly.
+
+---
+
 ## `redirect_uri_mismatch` when authorising
 
 Google requires the redirect URI to match a registered one **byte for byte**.
