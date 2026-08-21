@@ -35,7 +35,27 @@ pnpm exec wrangler login       # opens a browser, once
 pnpm deploy:cloudflare
 ```
 
-`pnpm deploy:cloudflare` does everything a machine can: creates the D1 database, writes its real ID into `wrangler.jsonc`, uploads your five secrets from `.env`, applies migrations, deploys, reads back the `workers.dev` origin, redeploys with `PUBLIC_BASE_URL` set to it, and checks `/healthz`. Then it prints the one URI you must register with Google.
+`pnpm deploy:cloudflare` does everything a machine can: creates the D1 database, writes its real ID into `wrangler.jsonc`, **sends your whole `.env` to the Worker**, applies migrations, deploys, reads back the `workers.dev` origin, redeploys with `PUBLIC_BASE_URL` set to it, and checks `/healthz`. Then it prints the one URI you must register with Google.
+
+### How `.env` reaches a Worker
+
+Worth knowing, because it is not obvious and getting it wrong is silent:
+
+**`wrangler deploy` does not read `.env`.** On its own it would deploy with the defaults baked into [`wrangler.jsonc`](wrangler.jsonc) — so an `.env` saying `GOOGLE_OAUTH_PUBLISHING_STATUS=production` would still produce a Worker showing a permanent "expires in 7 days" warning that is not true, and a Telegram bot configured in `.env` would simply not exist.
+
+The script closes that gap. Each key is sent one of two ways:
+
+| | How | Where it ends up |
+|---|---|---|
+| **Secrets** — client secret, tokens, API keys, webhook URLs | `wrangler secret put`, piped on stdin so it never reaches a process list | encrypted; not visible in the dashboard |
+| **Everything else** — mode, playlist, quota, thresholds, publishing status | `--var KEY:VALUE` on the deploy, which merges over the `wrangler.jsonc` block | plain text in the dashboard |
+| `DATABASE_PATH`, `USE_FIXTURES` | never sent | meaningless or dangerous on a Worker |
+
+The key list comes from `.env.example` itself rather than a copy inside the script, so adding a config option there carries it through automatically. A key in your `.env` that `.env.example` does not define is flagged rather than dropped in silence.
+
+`wrangler.jsonc`'s `vars` block stays as the safe default for the deploy-button path, where no `.env` exists. Your `.env` wins whenever you run the script.
+
+**So: change `.env`, re-run the script.** Editing a variable in the Cloudflare dashboard also works, but the next deploy overwrites it — `.env` is the copy worth keeping correct.
 
 It is safe to re-run — it skips anything already done rather than duplicating it, and it will never overwrite a `database_id` that is already real.
 

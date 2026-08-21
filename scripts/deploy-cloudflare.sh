@@ -23,7 +23,36 @@ die()  { printf '\n%sERROR%s %s\n\n' "$RED" "$OFF" "$1" >&2; exit 1; }
 cd "$(dirname "$0")/.."
 
 DB_NAME="later-db"
-SECRETS=(GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET INGEST_TOKEN TOKEN_ENCRYPTION_KEY SESSION_SECRET)
+
+# Everything in .env has to reach the Worker, or .env means one thing on Docker and something
+# else on Cloudflare — which is how you end up with a deployment that shows a permanent
+# "expires in 7 days" warning that is not true, or a Telegram bot that silently does not exist.
+#
+# `wrangler deploy` does not read .env at all. Values in wrangler.jsonc's `vars` block are
+# defaults for the deploy-button path, where no .env exists; anything you set locally has to be
+# passed explicitly, and `--var` merges over them rather than replacing the block.
+#
+# The universe of keys is read from .env.example rather than listed here, so adding a config
+# option to that file carries it through automatically instead of quietly not.
+
+# Uploaded with `wrangler secret put`: encrypted at rest, never shown in the dashboard.
+# NOTIFY_WEBHOOK_URL is here because a Discord or Slack webhook URL is a credential.
+SECRET_KEYS=(
+  GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
+  INGEST_TOKEN INGEST_HMAC_SECRET
+  TOKEN_ENCRYPTION_KEY SESSION_SECRET
+  GEMINI_API_KEY OPENAI_API_KEY INSTAGRAM_OEMBED_TOKEN
+  TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET NOTIFY_WEBHOOK_URL
+)
+
+# Meaningless or dangerous on a Worker. DATABASE_PATH is a local file; the Worker uses the D1
+# binding. USE_FIXTURES would deploy a service that reaches nothing and saves nothing.
+LOCAL_ONLY_KEYS=(DATABASE_PATH USE_FIXTURES)
+
+# Required before a deploy is worth attempting at all.
+REQUIRED_KEYS=(GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET TOKEN_ENCRYPTION_KEY SESSION_SECRET)
+
+contains() { local n="$1"; shift; for e in "$@"; do [ "$e" = "$n" ] && return 0; done; return 1; }
 
 # ── Preconditions ────────────────────────────────────────────────────────────
 [ -f .env ] || die "No .env found. Run 'pnpm setup' first, then fill in the two Google values."
@@ -42,10 +71,31 @@ for key in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; do
 done
 ok "Google OAuth client present"
 
-for key in INGEST_TOKEN TOKEN_ENCRYPTION_KEY SESSION_SECRET; do
+for key in TOKEN_ENCRYPTION_KEY SESSION_SECRET; do
   [ -n "$(env_value "$key")" ] || die "$key is empty in .env. Run 'pnpm setup' to generate it."
 done
+# INGEST_TOKEN is required in SOLO and ignored in MULTI, where each account mints its own.
+if [ "$(env_value LATER_MODE)" != "MULTI" ] && [ -z "$(env_value INGEST_TOKEN)" ]; then
+  die "INGEST_TOKEN is empty in .env. Run 'pnpm setup' to generate it."
+fi
 ok "Generated secrets present"
+
+case "$(env_value USE_FIXTURES)" in
+  true|TRUE|1|yes)
+    die "USE_FIXTURES=true in .env.
+
+  Deploying that would give you a public service that reaches nothing, saves nothing,
+  and says everything worked. Set USE_FIXTURES=false and run this again." ;;
+esac
+
+# Anything in .env that .env.example does not define would be dropped without a word, so say so.
+unknown=$(comm -23 \
+  <(grep -oE '^[A-Z][A-Z0-9_]*=' .env | tr -d '=' | sort -u) \
+  <(grep -oE '^[A-Z][A-Z0-9_]*=' .env.example | tr -d '=' | sort -u))
+if [ -n "$unknown" ]; then
+  printf '  %s!%s not defined in .env.example, so not sent to the Worker: %s\n' \
+    "$YELLOW" "$OFF" "$(printf '%s' "$unknown" | tr '\n' ' ')"
+fi
 
 if ! pnpm exec wrangler whoami >/dev/null 2>&1; then
   die "Not logged in to Cloudflare.
@@ -87,15 +137,38 @@ fi
 step "Secrets"
 
 existing=$(pnpm exec wrangler secret list --format json 2>/dev/null || echo '[]')
-for key in "${SECRETS[@]}"; do
+for key in "${SECRET_KEYS[@]}"; do
+  value=$(env_value "$key")
+  [ -n "$value" ] || continue          # optional ones you have not configured
   if printf '%s' "$existing" | grep -q "\"$key\""; then
-    skip "$key already set (change it in the dashboard if you need to)"
+    skip "$key already set (delete it in the dashboard to replace it)"
     continue
   fi
   # Piped on stdin so the value never appears in the process list or your shell history.
-  env_value "$key" | pnpm exec wrangler secret put "$key" >/dev/null
+  printf '%s' "$value" | pnpm exec wrangler secret put "$key" >/dev/null
   ok "$key uploaded"
 done
+
+# ── Variables ────────────────────────────────────────────────────────────────
+# Everything in .env.example that is neither a secret nor local-only. PUBLIC_BASE_URL is held
+# back: on the first deploy the origin is not known yet.
+step "Variables"
+
+VAR_ARGS=()
+carried=0
+while read -r key; do
+  contains "$key" "${SECRET_KEYS[@]}" && continue
+  contains "$key" "${LOCAL_ONLY_KEYS[@]}" && continue
+  [ "$key" = "PUBLIC_BASE_URL" ] && continue
+  value=$(env_value "$key")
+  [ -n "$value" ] || continue
+  VAR_ARGS+=(--var "$key:$value")
+  carried=$((carried + 1))
+done < <(grep -oE '^[A-Z][A-Z0-9_]*=' .env.example | tr -d '=' | sort -u)
+
+ok "$carried carried from .env"
+[ "$(env_value GOOGLE_OAUTH_PUBLISHING_STATUS)" = "production" ] &&
+  ok "GOOGLE_OAUTH_PUBLISHING_STATUS=production — no 7-day expiry warning"
 
 # ── Migrate, then deploy ─────────────────────────────────────────────────────
 # This order is not cosmetic: a Worker live against a database missing a column fails every
@@ -104,23 +177,38 @@ step "Applying migrations"
 pnpm exec wrangler d1 migrations apply "$DB_NAME" --remote
 ok "Schema up to date"
 
+# A PUBLIC_BASE_URL you set yourself wins — that is how a custom domain is configured, and
+# overwriting it with the workers.dev origin would break the redirect URI you registered.
+# A loopback value is the .env.example default rather than a choice, so it is ignored here.
+configured_base=$(env_value PUBLIC_BASE_URL)
+case "$configured_base" in
+  ''|*localhost*|*127.0.0.1*) configured_base='' ;;
+esac
+
 step "Deploying"
-deploy_output=$(pnpm exec wrangler deploy 2>&1 | tee /dev/stderr)
-origin=$(printf '%s' "$deploy_output" | grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' | head -n1)
+if [ -n "$configured_base" ]; then
+  ok "using PUBLIC_BASE_URL from .env: $configured_base"
+  pnpm exec wrangler deploy "${VAR_ARGS[@]}" --var "PUBLIC_BASE_URL:$configured_base" 2>&1 | tee /dev/stderr
+  origin="$configured_base"
+else
+  deploy_output=$(pnpm exec wrangler deploy "${VAR_ARGS[@]}" 2>&1 | tee /dev/stderr)
+  origin=$(printf '%s' "$deploy_output" | grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' | head -n1)
 
-if [ -z "$origin" ]; then
-  printf '\n%sDeployed, but I could not read the URL out of that output.%s\n' "$YELLOW" "$OFF"
-  printf 'Find it in the Cloudflare dashboard, then run:\n\n'
-  printf '    pnpm exec wrangler deploy --var PUBLIC_BASE_URL:https://YOUR-URL\n\n'
-  exit 0
+  if [ -z "$origin" ]; then
+    printf '\n%sDeployed, but I could not read the URL out of that output.%s\n' "$YELLOW" "$OFF"
+    printf 'Find it in the Cloudflare dashboard, then run:\n\n'
+    printf '    pnpm deploy:cloudflare\n\n'
+    printf 'after setting PUBLIC_BASE_URL in .env to that origin.\n\n'
+    exit 0
+  fi
+
+  # Redeploy with the origin baked in. It builds the OAuth redirect URI, and Google matches
+  # that byte for byte — so it has to be the real deployed hostname, not a guess. The vars are
+  # passed again because each deploy is independent, not a patch on the last.
+  step "Setting PUBLIC_BASE_URL to $origin"
+  pnpm exec wrangler deploy "${VAR_ARGS[@]}" --var "PUBLIC_BASE_URL:$origin" >/dev/null
+  ok "Redeployed"
 fi
-
-# ── PUBLIC_BASE_URL ──────────────────────────────────────────────────────────
-# Redeploy with the origin baked in. It builds the OAuth redirect URI, and Google matches that
-# byte for byte — so it has to be the real deployed hostname, not a guess.
-step "Setting PUBLIC_BASE_URL to $origin"
-pnpm exec wrangler deploy --var "PUBLIC_BASE_URL:$origin" >/dev/null
-ok "Redeployed"
 
 health=$(curl -fsS "$origin/healthz" 2>/dev/null || echo 'unreachable')
 case "$health" in
@@ -153,8 +241,8 @@ Then, ${BOLD}before you give this URL to anyone else${OFF} — the first person 
 
 Paste a YouTube link, press ${BOLD}Save it${OFF}, and check your ${BOLD}Later${OFF} playlist.
 
-${DIM}Still in OAuth "Testing" status? Google deletes your refresh token in exactly 7
-days. Publish at https://console.cloud.google.com/auth/overview, then:
-    pnpm exec wrangler deploy --var GOOGLE_OAUTH_PUBLISHING_STATUS:production${OFF}
+${DIM}Changed something in .env? Re-run this script — it re-sends every variable.
+Editing a variable in the Cloudflare dashboard works too, but the next deploy
+overwrites it, so .env is the copy worth keeping right.${OFF}
 
 EOF
