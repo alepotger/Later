@@ -97,7 +97,12 @@ if [ -n "$unknown" ]; then
     "$YELLOW" "$OFF" "$(printf '%s' "$unknown" | tr '\n' ' ')"
 fi
 
-if ! pnpm exec wrangler whoami >/dev/null 2>&1; then
+# `wrangler whoami` exits 0 even when nobody is logged in — it reports the fact on stdout and
+# calls that a successful report. So the exit code alone is not the answer; without reading the
+# output this check waves an unauthenticated run straight through to a confusing failure four
+# steps later, in the middle of creating a database.
+whoami_out=$(pnpm exec wrangler whoami 2>&1 || true)
+if printf '%s' "$whoami_out" | grep -qi 'not authenticated\|you are not logged in'; then
   die "Not logged in to Cloudflare.
 
   Run this once, approve it in the browser it opens, then run this script again:
