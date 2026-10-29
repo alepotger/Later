@@ -231,6 +231,16 @@ else
   ok "Redeployed"
 fi
 
+# Is anyone already connected? A redeploy of a working instance should not recite first-run
+# setup — telling someone to register a redirect URI they registered an hour ago reads as
+# "something came undone", and output that is wrong once is output nobody reads carefully again.
+connected=no
+accounts_json=$(pnpm exec wrangler d1 execute "$DB_NAME" --remote --json \
+  --command "SELECT COUNT(*) AS n FROM accounts" 2>/dev/null || true)
+case "$accounts_json" in
+  *'"n"'*) printf '%s' "$accounts_json" | grep -qE '"n": *0' || connected=yes ;;
+esac
+
 health=$(curl -fsS "$origin/healthz" 2>/dev/null || echo 'unreachable')
 case "$health" in
   *'"ok":true'*) ok "$origin/healthz says ok" ;;
@@ -238,6 +248,24 @@ case "$health" in
 esac
 
 # ── The one thing left ───────────────────────────────────────────────────────
+if [ "$connected" = yes ]; then
+cat <<EOF
+
+${GREEN}${BOLD}Deployed.${OFF}  ${BOLD}${origin}${OFF}
+
+An account is already connected, so there is nothing to set up. Your settings and
+secrets were re-sent from .env and the site is answering.
+
+    open ${BOLD}${origin}${OFF}
+
+${DIM}Changed something in .env? Re-run this script — it re-sends every variable.
+Editing a variable in the Cloudflare dashboard works too, but the next deploy
+overwrites it, so .env is the copy worth keeping right.${OFF}
+
+EOF
+exit 0
+fi
+
 cat <<EOF
 
 ${GREEN}${BOLD}Deployed.${OFF}  ${BOLD}${origin}${OFF}
