@@ -184,6 +184,7 @@ Being straight about this so you know what you're getting:
 | iOS Shortcut · Android PWA · Telegram bot | ✅ built (needs a reachable URL) |
 | Notifications (Telegram / webhook) | ✅ works |
 | Resolving a caption that *describes* a video | ✅ works (needs an LLM key for Tier 2) |
+| Resolving a video named only in speech or on-screen text | ❌ not built — Tier 3 is a config flag with no code |
 | One-click deploy · `docker compose up` | ✅ works — see [DEPLOY.md](DEPLOY.md) |
 | Several people on one instance (`LATER_MODE=MULTI`) | ✅ works |
 

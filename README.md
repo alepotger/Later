@@ -60,13 +60,15 @@ web paste box ┘                              ↓
                                     ├─ Tier 0  YouTube URL in the text     (free, exact)
                                     ├─ Tier 1  TikTok/Instagram oEmbed     (free, no key)
                                     ├─ Tier 2  LLM reads the caption       (optional)
-                                    └─ Tier 3  transcript / OCR            (off by default)
+                                    └─ Tier 3  transcript / OCR            (NOT BUILT)
                                               │
                                     confident? ─┬─ yes → add to playlist → notify
                                                 └─ no  → review inbox, one tap to confirm
 ```
 
 The endpoint answers in milliseconds and the work happens after. You never wait on a spinner, and you find out it worked from a notification.
+
+**Tier 3 is not implemented.** `ENABLE_TRANSCRIPT_RESOLUTION` exists in the config and nothing reads it. It is drawn above to show where such a thing would slot in, and that is all it is today. Nothing in Later looks at a video's pixels or audio — **a recommendation that appears only on screen or only in speech cannot be resolved by any tier.** The text has to say it somewhere: in the share, in the caption, or in the post's title.
 
 **Most shares never cost a thing.** A TikTok or Reel whose caption contains a YouTube link is handled by Tier 0 — a regex and one cheap lookup. No LLM, no search, no API key beyond YouTube itself. Later works fully with no LLM configured.
 
@@ -78,7 +80,7 @@ The original instinct behind this project was that YouTube permissions might be 
 
 - **Gemini cannot grant YouTube write access.** Adding a video to a playlist requires Google OAuth 2.0 with the YouTube Data API v3 scope. Gemini can't grant, proxy, or substitute for that. There is no path.
 - **The instinct is half-right about setup, though.** YouTube Data API v3 and the Gemini API live in the *same Google Cloud project*, enabled from the same console in one sitting. The setup genuinely converges — that's almost certainly what prompted the thought.
-- **Gemini's real job here is language.** Turning *"that Kurzgesagt video everyone's talking about"* into a search query is exactly what an LLM is for. That's Tier 2 and Tier 3 above, and it's the only place Later uses one — behind an interface, with Gemini as the default, and entirely optional.
+- **Gemini's real job here is language.** Turning *"that Kurzgesagt video everyone's talking about"* into a search query is exactly what an LLM is for. That's Tier 2 above, and it's the only place Later uses one — behind an interface, with Gemini as the default, and entirely optional. (Tier 3 is a sketch, not a feature: see below.)
 
 See [ADR-0009](docs/adr/0009-llm-provider-and-the-gemini-question.md).
 
