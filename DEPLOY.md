@@ -140,6 +140,8 @@ DATABASE_PATH=./data/later.db node dist/later.js
 
 Node 22 or newer. The bundle is a single file plus `drizzle/` (read at boot by the migrator) and `node_modules` (for the native SQLite driver).
 
+`better-sqlite3` is an **optional** dependency: it contains native code, and only the self-hosted Node path uses it — the Cloudflare target talks to D1 and never loads it. Marking it optional means a machine that cannot compile it (a Mac without Xcode command line tools, say) still gets a working install and a working Cloudflare deploy. If you want the self-hosted path and the optional install was skipped, install Apple's tools with `xcode-select --install` and run `pnpm install` again. The Docker image installs a compiler itself, so that path is unaffected.
+
 ---
 
 ## Choosing SOLO or MULTI
