@@ -147,7 +147,7 @@ async function promptForGoogle(contents) {
 
   const needsId = !existingId || idProblem;
   const needsSecret = !existingSecret || secretProblem;
-  if (!needsId && !needsSecret) return await askPublishingStatus(contents);
+  if (!needsId && !needsSecret) return await promptForLlm(await askPublishingStatus(contents));
 
   console.log(`\n  ${bold('Two values only your Google account has.')}`);
   console.log(
@@ -177,7 +177,47 @@ async function promptForGoogle(contents) {
     }
   }
 
-  return await askPublishingStatus(contents);
+  return await promptForLlm(await askPublishingStatus(contents));
+}
+
+/**
+ * Tier 2: the LLM that turns "that Veritasium one about planes" into a search query.
+ *
+ * Entirely optional — Tiers 0 and 1 handle any share whose text contains a YouTube link, which
+ * is most of them. Asked about only when not already configured, so re-running does not nag.
+ */
+async function promptForLlm(contents) {
+  if (!process.stdin.isTTY) return contents;
+  const provider = valueOf(contents, 'LLM_PROVIDER');
+  if (provider && provider !== 'none') return contents;
+  if (valueOf(contents, 'GEMINI_API_KEY')) return contents;
+
+  console.log(`\n  ${bold('Optional: resolve videos that are described but not linked.')}`);
+  console.log(`  ${dim('A Reel saying "that Kurzgesagt one about black holes" with no URL needs a')}`);
+  console.log(`  ${dim('language model to turn it into a search. Free key, ~3 minutes:')}`);
+  console.log(`  ${dim('https://aistudio.google.com/apikey  → "Create API key"')}`);
+  console.log(`  ${dim('Press Enter to skip — everything else works without it.')}\n`);
+
+  const key = await askUntilValid(
+    '  Gemini API key (hidden as you type, starts AIza): ',
+    (v) => {
+      if (/^\*+/.test(v) || v.includes('****')) return 'that looks like a masked value — use the copy button';
+      if (!v.startsWith('AIza')) return 'a Google API key starts with AIza';
+      if (v.length < 30) return `that is only ${v.length} characters; they are around 39`;
+      return null;
+    },
+    { hidden: true },
+  );
+
+  if (!key) {
+    console.log(`  ${dim('Skipped. Shares without a link will say so rather than guess.')}`);
+    return contents;
+  }
+
+  contents = setValue(contents, 'GEMINI_API_KEY', key);
+  contents = setValue(contents, 'LLM_PROVIDER', 'gemini');
+  console.log(`  ${green('✓')} saved, LLM_PROVIDER set to gemini`);
+  return contents;
 }
 
 async function askPublishingStatus(contents) {
