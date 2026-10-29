@@ -76,35 +76,39 @@ export function geminiLlm(options: { apiKey: string; model: string }, deps: Prov
         },
       };
 
-      const text = await withTimeout(async (signal) => {
-        const response = await fetchImpl(
-          `${GEMINI_BASE}/models/${encodeURIComponent(options.model)}:generateContent`,
-          {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              'x-goog-api-key': options.apiKey,
+      const text = await withTimeout(
+        async (signal) => {
+          const response = await fetchImpl(
+            `${GEMINI_BASE}/models/${encodeURIComponent(options.model)}:generateContent`,
+            {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                'x-goog-api-key': options.apiKey,
+              },
+              body: JSON.stringify(body),
+              signal,
             },
-            body: JSON.stringify(body),
-            signal,
-          },
-        );
+          );
 
-        if (!response.ok) {
-          deps.logger.warn('gemini call failed', { status: response.status });
-          return null;
-        }
+          if (!response.ok) {
+            deps.logger.warn('gemini call failed', { status: response.status });
+            return null;
+          }
 
-        const payload = (await response.json()) as {
-          candidates?: { content?: { parts?: { text?: string }[] } }[];
-        };
-        return payload.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
-      }, TIMEOUT_MS, (error) => {
-        deps.logger.warn('gemini call threw', {
-          model: options.model,
-          error: describeThrow(error),
-        });
-      });
+          const payload = (await response.json()) as {
+            candidates?: { content?: { parts?: { text?: string }[] } }[];
+          };
+          return payload.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+        },
+        TIMEOUT_MS,
+        (error) => {
+          deps.logger.warn('gemini call threw', {
+            model: options.model,
+            error: describeThrow(error),
+          });
+        },
+      );
 
       if (text === null) return [];
       const candidates = parseCandidates(text);
@@ -132,42 +136,46 @@ export function openAiCompatibleLlm(
 
   return {
     async extractCandidates(input: LlmInput): Promise<VideoCandidate[]> {
-      const text = await withTimeout(async (signal) => {
-        const response = await fetchImpl(endpoint, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            // Local runtimes like Ollama need no key, so it is genuinely optional.
-            ...(options.apiKey ? { authorization: `Bearer ${options.apiKey}` } : {}),
-          },
-          body: JSON.stringify({
+      const text = await withTimeout(
+        async (signal) => {
+          const response = await fetchImpl(endpoint, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              // Local runtimes like Ollama need no key, so it is genuinely optional.
+              ...(options.apiKey ? { authorization: `Bearer ${options.apiKey}` } : {}),
+            },
+            body: JSON.stringify({
+              model: options.model,
+              temperature: 0.1,
+              max_tokens: 512,
+              messages: [
+                { role: 'system', content: CANDIDATE_PROMPT },
+                { role: 'user', content: buildUserMessage(input) },
+              ],
+            }),
+            signal,
+          });
+
+          if (!response.ok) {
+            deps.logger.warn('llm call failed', { status: response.status, endpoint });
+            return null;
+          }
+
+          const payload = (await response.json()) as {
+            choices?: { message?: { content?: string } }[];
+          };
+          return payload.choices?.[0]?.message?.content ?? null;
+        },
+        TIMEOUT_MS,
+        (error) => {
+          deps.logger.warn('llm call threw', {
+            endpoint,
             model: options.model,
-            temperature: 0.1,
-            max_tokens: 512,
-            messages: [
-              { role: 'system', content: CANDIDATE_PROMPT },
-              { role: 'user', content: buildUserMessage(input) },
-            ],
-          }),
-          signal,
-        });
-
-        if (!response.ok) {
-          deps.logger.warn('llm call failed', { status: response.status, endpoint });
-          return null;
-        }
-
-        const payload = (await response.json()) as {
-          choices?: { message?: { content?: string } }[];
-        };
-        return payload.choices?.[0]?.message?.content ?? null;
-      }, TIMEOUT_MS, (error) => {
-        deps.logger.warn('llm call threw', {
-          endpoint,
-          model: options.model,
-          error: describeThrow(error),
-        });
-      });
+            error: describeThrow(error),
+          });
+        },
+      );
 
       if (text === null) return [];
       const candidates = parseCandidates(text);
