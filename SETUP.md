@@ -61,24 +61,20 @@ Later will warn you constantly if you choose Testing, and will notify you with a
 pnpm setup
 ```
 
-That creates `.env` and generates the three secrets — `INGEST_TOKEN`, `TOKEN_ENCRYPTION_KEY`, `SESSION_SECRET` — directly into it. They are pure entropy; there was never a reason for you to run `openssl` three times and paste the results into the right lines.
+That creates `.env`, generates the three secrets — `INGEST_TOKEN`, `TOKEN_ENCRYPTION_KEY`, `SESSION_SECRET` — directly into it, then **asks you for the two Google values and your publishing status**. The client secret is typed into a hidden prompt: it is not echoed to the screen, so it stays out of your scrollback and out of any screen share. There is no file to hand-edit.
+
+Run from a script or CI instead of a terminal, it skips the questions rather than hanging, and prints what is still missing.
 
 It is safe to re-run and **never overwrites a value that is already set**. That matters most for `TOKEN_ENCRYPTION_KEY`: replacing it is the difference between your stored Google token still decrypting and everyone having to re-authorise.
 
-Two values remain, and no script can produce them, because they only exist inside your own Google account:
+The two values it asks for are the ones no script can produce, because they only exist inside your own Google account. Both are at **https://console.cloud.google.com/auth/clients** → your OAuth client:
 
-| Variable | Where it comes from |
+| Variable | What it looks like |
 |---|---|
-| `GOOGLE_CLIENT_ID` | Batch 1 step 7 — ends in `.apps.googleusercontent.com` |
-| `GOOGLE_CLIENT_SECRET` | Batch 1 step 7 — starts with `GOCSPX-` |
+| `GOOGLE_CLIENT_ID` | ends in `.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | starts with `GOCSPX-` |
 
-Open `.env` and paste those two in. Every other variable is documented inline and has a working default.
-
-Plus, if you published to Production in step 1:
-
-```dotenv
-GOOGLE_OAUTH_PUBLISHING_STATUS=production
-```
+Press Enter at either prompt to skip it and edit `.env` by hand later. Every other variable is documented inline in the file and has a working default.
 
 In `MULTI` mode `INGEST_TOKEN` is ignored — each account mints its own from the web UI — but `pnpm setup` generates it anyway, so switching modes later needs no extra step.
 
