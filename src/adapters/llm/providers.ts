@@ -92,7 +92,24 @@ export function geminiLlm(options: { apiKey: string; model: string }, deps: Prov
           );
 
           if (!response.ok) {
-            deps.logger.warn('gemini call failed', { status: response.status });
+            // A 404 here is not "no such endpoint", it is "no such model for this key" — and
+            // model IDs get retired, so a default that was correct when written goes stale on
+            // its own. Name the model and the way to find a live one: the bare status code
+            // sends people looking at their key or their network instead.
+            deps.logger.warn('gemini call failed', {
+              status: response.status,
+              model: options.model,
+              ...(response.status === 404
+                ? {
+                    likelyCause: `the model "${options.model}" is not available to this API key`,
+                    fix: 'list valid names with GET /v1beta/models, then set LLM_MODEL in .env',
+                  }
+                : {}),
+              ...(response.status === 403
+                ? { likelyCause: 'the Generative Language API may not be enabled on this project' }
+                : {}),
+              ...(response.status === 429 ? { likelyCause: 'rate limited' } : {}),
+            });
             return null;
           }
 
