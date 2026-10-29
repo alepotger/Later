@@ -26,6 +26,7 @@
     "db:apply:remote": "wrangler d1 migrations apply later-db --remote",
     "deploy:worker": "wrangler d1 migrations apply later-db --remote && wrangler deploy",
     "configure": "node scripts/setup.mjs",
+    "check:llm": "tsx scripts/check-llm.ts",
     "deploy:cloudflare": "bash scripts/deploy-cloudflare.sh"
   },
   "dependencies": {
