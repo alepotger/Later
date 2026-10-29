@@ -8,7 +8,7 @@ Four things are written and tested but not yet verified against reality, all for
 
 | | Needs |
 |---|---|
-| The live Google OAuth round-trip | Batch 1 (done) + one local run by the owner |
+| ~~The live Google OAuth round-trip~~ | **VERIFIED 2026-10-29** on a real Cloudflare deployment — see below |
 | Telegram ingress and notifications | Batch 2, and a public HTTPS URL |
 | iOS Shortcut / Android PWA | Batch 2, and a physical phone |
 | ~~The Docker image build~~ | done by CI, not by me — [run 31132160426](https://github.com/alepotger/Later/actions/runs/31132160426) builds the image, starts it, and shares a video through it on every commit |
@@ -117,7 +117,7 @@ Sizing is in **work units** — one unit is roughly a coherent, independently re
 | ✅ 1.4 | Ports & adapters: `Clock`, `KeyValue`, `Db`, `YouTubePort`, `LlmPort`, `Notifier` | no |
 | ✅ 1.5 | **Fixture YouTube client** — recorded responses, quota accounting, injectable failures (`invalid_grant`, `quotaExceeded`, private/deleted video) | no |
 | ✅ 1.6 | Token vault: AES-GCM encryption at rest via WebCrypto, rotation-aware | no |
-| ⚠️ 1.7 | OAuth flow: `/auth/start`, `/auth/callback`, PKCE, state, refresh, `invalid_grant` → `reauth_required` | **yes — Batch 1** |
+| ✅ 1.7 | OAuth flow: `/auth/start`, `/auth/callback`, PKCE, state, refresh, `invalid_grant` → `reauth_required` | **verified live, 2026-10-29** |
 | ✅ 1.8 | Playlist resolver: find-or-create, cache the ID, never assume it exists | yes (real run only) |
 | ✅ 1.9 | `POST /api/ingest`: bearer auth, rate limit, idempotency key, 202, `waitUntil` dispatch | no |
 | ✅ 1.10 | Pipeline runner + quota gate + dedupe (both DB-side and playlist-side) | no |
@@ -126,7 +126,9 @@ Sizing is in **work units** — one unit is roughly a coherent, independently re
 | ✅ 1.13 | CI: lint, typecheck, test, gitleaks secret scan | no |
 | ✅ 1.14 | `SETUP.md` for the local/SOLO path, written and then read as a stranger | no |
 
-Only **1.7** needed the console, and it is written and unit-tested against a stubbed Google token endpoint — every branch including `invalid_grant`, token rotation, and transient failure. What it has not done is complete one real round-trip with Google, which is the ⚠️ above and is waiting on [Batch 1](docs/ACTION-REQUIRED.md).
+**1.7 is now verified against real Google.** On 2026-10-29 a deployment at `later.<subdomain>.workers.dev` completed the full round-trip: consent screen, authorisation code, token exchange, identity lookup, playlist find-or-create. The UI reported the connected account and the playlist, and the quota ledger recorded 51 units — the real cost of `playlists.insert` plus a list call, which is the proof the calls were genuine rather than mocked.
+
+Everything up to that point had only ever run against a stubbed token endpoint. Three defects surfaced on the way through and are fixed: `wrangler whoami` exits 0 while reporting that nobody is logged in; `pnpm setup` and `pnpm deploy` are reserved pnpm command names that silently shadowed this project's scripts; and a masked client secret copied off Google's console was accepted without complaint until Google rejected the token exchange. Each is now caught at the step where it happens.
 
 **What was verified, and how:**
 
