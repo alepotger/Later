@@ -69,6 +69,24 @@ for key in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; do
   It comes from a Google Cloud OAuth client in your own Google account — free, ~15
   minutes, no card. Exact click path: docs/ACTION-REQUIRED.md, Batch 1."
 done
+
+# The console shows the client secret masked (****nI43). Selecting that text copies the
+# asterisks, and nothing notices until Google rejects the token exchange — after a deploy, a
+# browser round-trip and a consent screen. Three characters of checking saves all of that.
+secret=$(env_value GOOGLE_CLIENT_SECRET)
+case "$secret" in
+  \**)
+    die "GOOGLE_CLIENT_SECRET in .env is the masked value Google displays, not the secret.
+
+  Open https://console.cloud.google.com/auth/clients, click your OAuth client, and use the
+  ${BOLD}copy button${OFF} beside the secret — selecting the text gives you the asterisks.
+  Then run ${BOLD}pnpm configure${OFF} and try again." ;;
+esac
+case "$secret" in
+  GOCSPX-*) ;;
+  *) die "GOOGLE_CLIENT_SECRET in .env does not start with GOCSPX-, so Google will reject it.
+  Re-copy it from https://console.cloud.google.com/auth/clients and run ${BOLD}pnpm configure${OFF}." ;;
+esac
 ok "Google OAuth client present"
 
 for key in TOKEN_ENCRYPTION_KEY SESSION_SECRET; do
@@ -141,14 +159,12 @@ fi
 # ── Secrets ──────────────────────────────────────────────────────────────────
 step "Secrets"
 
-existing=$(pnpm exec wrangler secret list --format json 2>/dev/null || echo '[]')
+# Always re-sent, never skipped. Skipping what is already there looks like a saving until the
+# value in Cloudflare is the wrong one: you fix .env, re-run this, and nothing changes, because
+# the script sees a secret with that name and moves on. .env is the source of truth or it is not.
 for key in "${SECRET_KEYS[@]}"; do
   value=$(env_value "$key")
   [ -n "$value" ] || continue          # optional ones you have not configured
-  if printf '%s' "$existing" | grep -q "\"$key\""; then
-    skip "$key already set (delete it in the dashboard to replace it)"
-    continue
-  fi
   # Piped on stdin so the value never appears in the process list or your shell history.
   printf '%s' "$value" | pnpm exec wrangler secret put "$key" >/dev/null
   ok "$key uploaded"
