@@ -15,6 +15,7 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,7 +56,84 @@ function setValue(contents, key, value) {
     : `${contents.trimEnd()}\n${line}\n`;
 }
 
-function main() {
+/**
+ * Ask a question on the terminal.
+ *
+ * `hidden` suppresses the echo, so a pasted client secret never appears on screen, in a
+ * scrollback buffer, or in a screen share. It is still written to .env — that file is the
+ * point — but there is no reason for it to be visible on the way there.
+ */
+function ask(question, { hidden = false } = {}) {
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    if (hidden) {
+      // readline writes the prompt through this hook; echo everything until the prompt has
+      // been printed, then nothing, so the typed characters are swallowed.
+      let promptShown = false;
+      rl._writeToOutput = (chunk) => {
+        if (!promptShown) {
+          rl.output.write(chunk);
+          if (chunk.includes(question)) promptShown = true;
+        }
+      };
+    }
+    rl.question(question, (answer) => {
+      if (hidden) rl.output.write('\n');
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
+/**
+ * Fill in the two Google values by asking, rather than telling someone to open a text editor.
+ *
+ * Only when attached to a terminal: piped or CI runs fall through to the printed instructions,
+ * so nothing ever hangs waiting for input that will not come.
+ */
+async function promptForGoogle(contents) {
+  if (!process.stdin.isTTY) return contents;
+
+  console.log(`\n  ${bold('Two values only your Google account has.')}`);
+  console.log(`  ${dim('Both are on https://console.cloud.google.com/auth/clients → your OAuth client.')}`);
+  console.log(`  ${dim('Press Enter to skip either one and fill it in by hand later.')}\n`);
+
+  if (!valueOf(contents, 'GOOGLE_CLIENT_ID')) {
+    const id = await ask('  Client ID (ends .apps.googleusercontent.com): ');
+    if (id) {
+      if (!id.endsWith('.apps.googleusercontent.com')) {
+        console.log(`  ${yellow('! That does not end in .apps.googleusercontent.com — saved anyway.')}`);
+      }
+      contents = setValue(contents, 'GOOGLE_CLIENT_ID', id);
+    }
+  }
+
+  if (!valueOf(contents, 'GOOGLE_CLIENT_SECRET')) {
+    const secret = await ask('  Client secret (hidden as you type, starts GOCSPX-): ', { hidden: true });
+    if (secret) {
+      if (!secret.startsWith('GOCSPX-')) {
+        console.log(`  ${yellow('! That does not start with GOCSPX- — saved anyway.')}`);
+      }
+      contents = setValue(contents, 'GOOGLE_CLIENT_SECRET', secret);
+      console.log(`  ${green('✓')} saved to .env, never printed`);
+    }
+  }
+
+  // Not cosmetic: left at `testing`, a published app shows a permanent "expires in 7 days"
+  // warning that is false, and a warning that cries wolf is one nobody reads when it is real.
+  const published = await ask(
+    `\n  Have you published the OAuth app to Production? ${dim('(y/N)')} `,
+  );
+  contents = setValue(
+    contents,
+    'GOOGLE_OAUTH_PUBLISHING_STATUS',
+    /^y/i.test(published) ? 'production' : 'testing',
+  );
+
+  return contents;
+}
+
+async function main() {
   if (!existsSync(examplePath)) {
     console.error('.env.example is missing — are you in the repository root?');
     process.exit(1);
@@ -68,29 +146,29 @@ function main() {
   if (created) console.log(`  Created ${bold('.env')} from .env.example\n`);
   else console.log(`  Found an existing ${bold('.env')}. Nothing already set will be changed.\n`);
 
-  const generated = [];
   for (const [key, make] of Object.entries(GENERATED)) {
     if (valueOf(contents, key)) {
       console.log(`  ${dim('·')} ${key.padEnd(22)} ${dim('already set, left alone')}`);
       continue;
     }
     contents = setValue(contents, key, make());
-    generated.push(key);
     console.log(`  ${green('✓')} ${key.padEnd(22)} ${green('generated')}`);
   }
 
+  contents = await promptForGoogle(contents);
   writeFileSync(envPath, contents, { mode: 0o600 });
 
   const missing = Object.keys(MANUAL).filter((key) => !valueOf(contents, key));
 
   if (missing.length === 0) {
-    console.log(`\n  ${green('Everything required is set.')} Start it with:\n`);
-    console.log(`      ${bold('pnpm dev')}\n`);
-    console.log(`  Then open http://localhost:8787 and click "Connect Google".\n`);
+    console.log(`\n  ${green('Everything required is set.')} Deploy it with:\n`);
+    console.log(`      ${bold('pnpm exec wrangler login')}   ${dim('— opens a browser, once')}`);
+    console.log(`      ${bold('pnpm deploy:cloudflare')}\n`);
+    console.log(`  ${dim('Or run it locally first:')} ${bold('pnpm dev')}\n`);
     return;
   }
 
-  console.log(`\n  ${yellow('Two values I cannot generate for you:')}\n`);
+  console.log(`\n  ${yellow('Still missing:')}\n`);
   for (const key of missing) console.log(`      ${bold(key.padEnd(22))} ${dim(MANUAL[key])}`);
   console.log(`
   They come from a Google Cloud OAuth client, which only exists inside your own
@@ -98,6 +176,8 @@ function main() {
   and the exact click path is in:
 
       ${bold('docs/ACTION-REQUIRED.md')}  ${dim('— Batch 1')}
+
+  Add them to ${bold('.env')} by hand, or run ${bold('pnpm setup')} again to be asked.
 
   ${bold('Want to see Later work before doing any of that?')} You do not need them:
 
@@ -108,4 +188,4 @@ function main() {
 `);
 }
 
-main();
+await main();
