@@ -30,11 +30,13 @@ If that's a dealbreaker, stop here — you'll save yourself 15 minutes.
 
 ## Status
 
-**Phase 4 code-complete.** Share a YouTube link and it lands in your playlist, deduplicated, with quota tracked and token expiry handled. iOS Shortcut, Android PWA share target, and a Telegram bot all hit the same endpoint. A Reel whose caption only *describes* a video is resolved through oEmbed and an optional LLM — or honestly held for one-tap review when Later is not sure. Deploy it with one button or one `docker compose up`, for yourself or for a household. 495 tests, none of which need credentials.
+**Phase 4 code-complete.** Share a YouTube link and it lands in your playlist, deduplicated, with quota tracked and token expiry handled. iOS Shortcut, Android PWA share target, and a Telegram bot all hit the same endpoint. A Reel whose caption only *describes* a video is resolved through oEmbed and an optional LLM — or honestly held for one-tap review when Later is not sure. Deploy it with one button or one `docker compose up`, for yourself or for a household. 498 tests, none of which need credentials.
 
 Start with [SETUP.md](SETUP.md) to run it locally, or [DEPLOY.md](DEPLOY.md) to put it somewhere your phone can reach.
 
-**Not yet verified against a live deployment:** the author has not yet run a real Google OAuth round-trip or built the Docker image on a machine with a Docker daemon. Both are written and covered by tests against stubs; neither has been observed working end to end with real credentials. Tracked in [PLAN.md](PLAN.md) and [docs/verification-log.md](docs/verification-log.md).
+**Verified live on 2026-10-29:** a real Google OAuth round-trip, on a Cloudflare Workers deployment made from this repo — consent, encrypted refresh token, playlist created, quota recorded. The Docker image is built, started and shared through by CI on every commit. Still unverified: Telegram and the phone clients, which need a device. Tracked in [PLAN.md](PLAN.md) and [docs/verification-log.md](docs/verification-log.md).
+
+**Tier 2 is not free.** The optional LLM step needs a paid API key — Gemini has no free allowance for new projects as of late 2026. Tiers 0 and 1 cost nothing and handle any share whose text contains the link. See [SETUP.md](SETUP.md).
 
 Later is being built in phases, and `main` is kept working at every phase boundary. See [PLAN.md](PLAN.md) for what's built and what's next.
 
@@ -59,7 +61,7 @@ web paste box ┘                              ↓
                                     resolution pipeline
                                     ├─ Tier 0  YouTube URL in the text     (free, exact)
                                     ├─ Tier 1  TikTok/Instagram oEmbed     (free, no key)
-                                    ├─ Tier 2  LLM reads the caption       (optional)
+                                    ├─ Tier 2  LLM reads the caption       (optional, paid)
                                     └─ Tier 3  transcript / OCR            (NOT BUILT)
                                               │
                                     confident? ─┬─ yes → add to playlist → notify

@@ -3,9 +3,9 @@
  *
  * Two implementations behind one interface, both plain `fetch` so they run unchanged on
  * Workers. Gemini is the default when a provider is configured — not on model quality, but
- * because its free tier needs no card and it lives in the *same Google Cloud project* the
- * deployer already created for YouTube. For a project optimising onboarding, that is the
- * deciding factor. See docs/adr/0009.
+ * because it lives in the *same Google Cloud project* the deployer already created for
+ * YouTube, which is one fewer account to make. It is not free; nothing here is. See
+ * docs/adr/0009 and its 2026-10-29 revision.
  *
  * Neither ever throws for a bad response. A Tier 2 miss sends the item to review; it must not
  * take down the pipeline.
@@ -92,23 +92,27 @@ export function geminiLlm(options: { apiKey: string; model: string }, deps: Prov
           );
 
           if (!response.ok) {
-            // A 404 here is not "no such endpoint", it is "no such model for this key" — and
-            // model IDs get retired, so a default that was correct when written goes stale on
-            // its own. Name the model and the way to find a live one: the bare status code
-            // sends people looking at their key or their network instead.
+            // Read what the API actually said rather than inferring from the status code.
+            // A depleted-credits account was observed returning 404 to one call and 402 to the
+            // next, so status-based guesses sent the operator hunting a retired model id while
+            // the body said "Your prepayment credits are depleted" in plain English. The body
+            // is small, it is the only authoritative account of the failure, and guessing at
+            // it costs more than reading it.
+            const detail = await response
+              .text()
+              .then((raw) => {
+                const parsed = JSON.parse(raw) as { error?: { message?: string; status?: string } };
+                return {
+                  ...(parsed.error?.message ? { apiMessage: parsed.error.message.trim() } : {}),
+                  ...(parsed.error?.status ? { apiStatus: parsed.error.status } : {}),
+                };
+              })
+              .catch(() => ({}));
+
             deps.logger.warn('gemini call failed', {
               status: response.status,
               model: options.model,
-              ...(response.status === 404
-                ? {
-                    likelyCause: `the model "${options.model}" is not available to this API key`,
-                    fix: 'list valid names with GET /v1beta/models, then set LLM_MODEL in .env',
-                  }
-                : {}),
-              ...(response.status === 403
-                ? { likelyCause: 'the Generative Language API may not be enabled on this project' }
-                : {}),
-              ...(response.status === 429 ? { likelyCause: 'rate limited' } : {}),
+              ...detail,
             });
             return null;
           }

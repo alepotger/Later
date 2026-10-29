@@ -80,3 +80,26 @@ The model proposes; it never disposes:
 - **Tier 0 + Tier 1 coverage turns out to be near-total** in real usage — then Tier 2 is a rarely-used luxury and could be trimmed rather than extended. Worth measuring locally before extending Tier 3.
 - **Gemini's free tier changes**, or Flash models leave it. Then the default flips to whatever is free with no card, and existing deployers are unaffected since it's config.
 - **Structured output diverges** enough between providers that one interface stops fitting cleanly.
+
+---
+
+## Revision — 2026-10-29: the free-tier premise no longer holds
+
+**The "Revisit if" below fired, in the field.** A first-time deployer configured Gemini exactly as documented and got, after four misdiagnoses:
+
+```
+402  "Your prepayment credits are depleted. Please go to AI Studio ... to manage
+     your project and billing."   RESOURCE_EXHAUSTED
+```
+
+This ADR chose Gemini as the default partly on *"Free tier covers the Flash models with no card required — the free-tier mandate again."* That was verified in Phase 0 against contemporary sources and recorded as confirmed. **It is no longer true**, at least for a newly created project in late 2026: the API answers with a prepayment-credits error rather than serving a free quota.
+
+**What this does and does not change.**
+
+It does not change the decision to keep the LLM behind `LlmPort` with Gemini as the configured default — that interface is exactly what makes this survivable. It does not change Tiers 0 and 1, which are free, need no key, and handle any share whose text contains a link: the large majority.
+
+It does change the honesty of the onboarding. Documentation told people Gemini was free and needed no card. Anyone following it hit a wall with a confusing status code. Every claim of "free" about Gemini has been removed or qualified, and the setup prompt no longer calls it a free key.
+
+**What it does not change, deliberately:** the default stays `gemini`. An OpenAI-compatible endpoint also costs money, a local model cannot be reached from a Worker, and no option is free any more — so switching the default would trade one paid provider for another while invalidating every existing deployment's config. The right fix is accurate documentation, not a different default.
+
+**Standing correction to the method, not just the fact.** Phase 0 recorded this as "confirmed" from search results. A pricing or free-tier claim is not the kind of thing a search result confirms durably — it is a commercial policy that changes without notice and without a deprecation window. Claims of that shape now get recorded as *true when checked, and likely to drift*, not as verified constraints like the 2016 Watch Later removal, which is a fact about the past.

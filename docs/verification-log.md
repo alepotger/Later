@@ -95,7 +95,7 @@ Checked because the hosting decision rests on them ([ADR-0002](adr/0002-hosting-
 | D1 free: 5 GB storage, 5M rows read/day, 100k rows written/day | confirmed |
 | "Deploy to Cloudflare" button parses wrangler config, **auto-provisions D1**, creates the repo in the clicker's account | confirmed — this is the reason Cloudflare wins the deploy-button requirement |
 | Cloudflare Queues requires a paid plan | confirmed — hence the cron-driven job table in ADR-0007 |
-| Gemini free tier covers the Flash models via REST with an API-key header; Pro models are paid-only as of 2026 | confirmed (rate-limit figures vary by source: 10 RPM, and either 250 or 1,500 requests/day) |
+| ~~Gemini free tier covers the Flash models via REST with an API-key header~~ | **FALSIFIED IN THE FIELD, 2026-10-29.** A new project calling `generateContent` gets `402 RESOURCE_EXHAUSTED — "Your prepayment credits are depleted"`. Recorded as "confirmed" in Phase 0 from contemporary search results; commercial terms are not the kind of claim a search confirms durably. See [ADR-0009](adr/0009-llm-provider-and-the-gemini-question.md). |
 
 The Gemini rate-limit disagreement between sources does not affect the design: Tier 2 is invoked at most once per ingested item that lacks a URL, which is far below even the most conservative figure, and the LLM is optional anyway.
 
@@ -109,12 +109,12 @@ Kept current so nobody has to reverse-engineer it from phase notes. Everything h
 
 | Claim | Why it is unverified | What would verify it |
 |---|---|---|
-| A real Google OAuth round-trip completes and returns a refresh token | no credentials here; every branch is tested against a stubbed token endpoint | the owner running `pnpm dev` and clicking **Connect Google** once, after Batch 1 |
+| ~~A real Google OAuth round-trip completes and returns a refresh token~~ | **VERIFIED 2026-10-29.** The owner deployed to `workers.dev`, clicked **Connect Google**, consented past the unverified-app interstitial, and the callback stored an encrypted refresh token. Later then created the playlist and reported 51 quota units spent — so the token was not merely stored, it was spent on a real API call. | — |
 | Telegram ingress and notifications reach real Telegram | `api.telegram.org` is blocked by the egress policy | Batch 2, on a deployed instance |
 | The iOS Shortcut `.plist` imports on a device | no iPhone; Apple only allows frictionless import from an iCloud link, which needs a device | Batch 2 |
 | The Android PWA appears in the share sheet | no Android device, and `share_target` needs HTTPS | Batch 2 |
 | ~~The Docker image builds and runs~~ | **VERIFIED, but not by me** — this environment has no Docker daemon | CI [run 31132160426](https://github.com/alepotger/Later/actions/runs/31132160426) built the image, started the container, got `{"ok":true}` from `/healthz`, and resolved a share through `/api/ingest`. Re-verified on every commit. |
-| The "Deploy to Cloudflare" button provisions D1 and deploys | no Cloudflare account | Batch 4 step A2 |
+| The "Deploy to Cloudflare" button provisions D1 and deploys | the button was tried and did not complete; the deployment was made with `pnpm deploy:cloudflare` instead, which **is** now verified end to end — D1 created, migrations applied, secrets uploaded, Worker serving | someone getting the button itself to finish |
 | Instagram oEmbed works without a token (see above) | medium-confidence, from third-party write-ups | one live call against a public Reel |
 
 **What was verified locally for the Docker path** before CI could run it: the exact layout the runtime stage ships — a production-only pnpm `node_modules`, the esbuild bundle, and `drizzle/` — was reproduced in a scratch directory and started with `node dist/later.js`. It migrated, listened, served `/healthz`, and answered `/api/ingest`. What that does *not* prove is anything about the Dockerfile itself: base image, layer copying, the pnpm symlink tree surviving `COPY --from`, or the native SQLite binding compiling on the build platform. Those are exactly what the CI job catches, and on its first run it caught nothing — the image built and served on the first attempt.
