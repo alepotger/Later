@@ -212,7 +212,10 @@ export function createApp(runtime: Runtime): Hono<AppBindings> {
           ...summary,
           rejection: settledReason ?? result.rejection,
           // Idempotency matched everything, so this is a re-share rather than a new save.
-          alreadyAccepted: result.items.every((item) => !item.created),
+          // "Already shared" is only true if nothing happened. A re-share that re-queued a
+          // previously failed item did do something, and saying otherwise is how a retry
+          // looks like a no-op.
+          alreadyAccepted: result.items.every((item) => !item.created && !item.retried),
         }),
       }),
     );

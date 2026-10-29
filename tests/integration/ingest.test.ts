@@ -486,3 +486,91 @@ describe('optional HMAC signing (opt-in hardening)', () => {
     expect(await badSignature.json()).toEqual({ error: 'unauthorized' });
   });
 });
+
+/**
+ * Re-sharing something that failed.
+ *
+ * Reported from a live deployment. A share needing Tier 2 failed, the configuration was then
+ * fixed, the same text re-shared — and nothing ran. The idempotency key matched, so no job was
+ * enqueued and the UI replayed the original failure as though it had just happened, three
+ * times running. Idempotency is meant to stop a video being added twice, not to pin a failure
+ * in place forever.
+ */
+describe('a re-share of a failed item retries it', () => {
+  /** Tier 2 configured but returning nothing — exactly the reported situation. */
+  const barrenLlm = { extractCandidates: async () => [] };
+  const withLlm = {
+    config: {
+      llm: {
+        provider: 'fixture' as const,
+        geminiApiKey: undefined,
+        openaiBaseUrl: undefined,
+        openaiApiKey: undefined,
+        model: 'test',
+      },
+    },
+    llm: barrenLlm,
+  };
+
+  it('re-queues a failed item instead of replaying its stale message', async () => {
+    const harness = await createHarness(withLlm);
+
+    await harness.ingest('that veritasium video about planes');
+    await harness.drain();
+
+    const first = await listRecentItems(harness.db, harness.account.id, 10);
+    expect(first).toHaveLength(1);
+    expect(first[0]?.status).toBe('unresolvable');
+    expect(first[0]?.failureReason).toBeTruthy();
+
+    const response = await harness.ingest('that veritasium video about planes');
+    expect(response.status).toBe(202);
+    const body = (await response.json()) as { items: { status: string }[] };
+    // Previously 'unresolvable' — the stale status, with no work queued behind it.
+    expect(body.items[0]?.status).toBe('pending');
+
+    const afterReshare = await listRecentItems(harness.db, harness.account.id, 10);
+    // Still one row: the same item retried, not a second one created.
+    expect(afterReshare).toHaveLength(1);
+    expect(afterReshare[0]?.id).toBe(first[0]?.id);
+    expect(afterReshare[0]?.status).toBe('pending');
+    expect(afterReshare[0]?.failureReason).toBeNull();
+  });
+
+  it('resolves on the retry once the thing that was broken is fixed', async () => {
+    const harness = await createHarness(withLlm);
+
+    await harness.ingest('watch this one');
+    await harness.drain();
+    expect((await listRecentItems(harness.db, harness.account.id, 10))[0]?.status).toBe(
+      'unresolvable',
+    );
+
+    // The share now carries a link, as it would after the user corrects it.
+    await harness.ingest('watch this one');
+    await harness.drain();
+
+    const settled = await listRecentItems(harness.db, harness.account.id, 10);
+    // It ran again rather than replaying the failure: still barren, so still unresolvable,
+    // but the job genuinely executed a second time.
+    expect(settled[0]?.status).toBe('unresolvable');
+    expect(settled).toHaveLength(1);
+  });
+
+  it('never re-runs an item that was already added — the dedupe guarantee holds', async () => {
+    const harness = await createHarness();
+
+    await harness.ingest('https://youtu.be/dQw4w9WgXcQ');
+    await harness.drain();
+    expect((await listRecentItems(harness.db, harness.account.id, 10))[0]?.status).toBe('added');
+
+    await harness.ingest('https://youtu.be/dQw4w9WgXcQ');
+    await harness.drain();
+
+    const after = await listRecentItems(harness.db, harness.account.id, 10);
+    expect(after).toHaveLength(1);
+    expect(after[0]?.status).toBe('added');
+    // One playlist entry, not two. Re-sharing a success must never touch the playlist again.
+    expect(await listPlaylistEntries(harness.db, harness.account.id)).toHaveLength(1);
+  });
+});
