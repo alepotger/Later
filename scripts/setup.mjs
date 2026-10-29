@@ -52,7 +52,7 @@ function valueOf(contents, key) {
 function setValue(contents, key, value) {
   const line = `${key}=${value}`;
   return new RegExp(`^${key}=.*$`, 'm').test(contents)
-    ? contents.replace(new RegExp(`^${key}=.*$`, 'm'), line)
+    ? contents.replace(new RegExp(`^${key}=.*$`, 'm'), () => line)
     : `${contents.trimEnd()}\n${line}\n`;
 }
 
@@ -86,6 +86,50 @@ function ask(question, { hidden = false } = {}) {
 }
 
 /**
+ * Does this look like a value Google actually issued, or like something copied off a screen?
+ *
+ * The console renders the client secret masked — `****nI43` — and selecting that text with a
+ * mouse yields the asterisks, not the secret. It is accepted silently by everything until
+ * Google rejects the token exchange, three steps and one browser round-trip later. Catching
+ * the shape here turns a baffling failure into a sentence.
+ */
+function describeBadSecret(value) {
+  if (/^\*+/.test(value) || value.includes('****')) {
+    return "that is the masked value Google shows on screen, not the secret itself — use the copy button beside it rather than selecting the text";
+  }
+  if (!value.startsWith('GOCSPX-')) return 'a Google client secret starts with GOCSPX-';
+  if (value.length < 24) return `that is only ${value.length} characters; they are around 35`;
+  return null;
+}
+
+function describeBadClientId(value) {
+  if (/^\*+/.test(value) || value.includes('****')) {
+    return 'that looks like a masked value — use the copy button rather than selecting the text';
+  }
+  if (!value.endsWith('.apps.googleusercontent.com')) {
+    return 'a Google client ID ends in .apps.googleusercontent.com';
+  }
+  return null;
+}
+
+/** Ask until the answer looks right, or the user insists, or they skip with Enter. */
+async function askUntilValid(prompt, validate, { hidden = false } = {}) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const value = await ask(prompt, { hidden });
+    if (!value) return '';
+    const problem = validate(value);
+    if (!problem) return value;
+    console.log(`  ${yellow('✗')} ${problem}`);
+    if (attempt === 2) {
+      console.log(`  ${dim('Saving it anyway — correct it in .env if this was deliberate.')}`);
+      return value;
+    }
+    console.log(`  ${dim('Try again, or press Enter to skip.')}`);
+  }
+  return '';
+}
+
+/**
  * Fill in the two Google values by asking, rather than telling someone to open a text editor.
  *
  * Only when attached to a terminal: piped or CI runs fall through to the printed instructions,
@@ -94,43 +138,59 @@ function ask(question, { hidden = false } = {}) {
 async function promptForGoogle(contents) {
   if (!process.stdin.isTTY) return contents;
 
-  console.log(`\n  ${bold('Two values only your Google account has.')}`);
-  console.log(`  ${dim('Both are on https://console.cloud.google.com/auth/clients → your OAuth client.')}`);
-  console.log(`  ${dim('Press Enter to skip either one and fill it in by hand later.')}\n`);
+  // A value that is present but malformed is worse than a missing one — it looks done and
+  // fails later — so offer to replace it rather than treating "set" as "settled".
+  const existingSecret = valueOf(contents, 'GOOGLE_CLIENT_SECRET');
+  const existingId = valueOf(contents, 'GOOGLE_CLIENT_ID');
+  const secretProblem = existingSecret ? describeBadSecret(existingSecret) : null;
+  const idProblem = existingId ? describeBadClientId(existingId) : null;
 
-  if (!valueOf(contents, 'GOOGLE_CLIENT_ID')) {
-    const id = await ask('  Client ID (ends .apps.googleusercontent.com): ');
-    if (id) {
-      if (!id.endsWith('.apps.googleusercontent.com')) {
-        console.log(`  ${yellow('! That does not end in .apps.googleusercontent.com — saved anyway.')}`);
-      }
-      contents = setValue(contents, 'GOOGLE_CLIENT_ID', id);
-    }
+  const needsId = !existingId || idProblem;
+  const needsSecret = !existingSecret || secretProblem;
+  if (!needsId && !needsSecret) return await askPublishingStatus(contents);
+
+  console.log(`\n  ${bold('Two values only your Google account has.')}`);
+  console.log(
+    `  ${dim('Both are on https://console.cloud.google.com/auth/clients → your OAuth client.')}`,
+  );
+  console.log(`  ${dim('Use the copy button beside each one; selecting the text can give you a')}`);
+  console.log(`  ${dim('masked placeholder instead. Press Enter to skip and fill in by hand.')}\n`);
+
+  if (needsId) {
+    if (idProblem) console.log(`  ${yellow('! The client ID in .env looks wrong:')} ${idProblem}`);
+    const id = await askUntilValid('  Client ID (ends .apps.googleusercontent.com): ', describeBadClientId);
+    if (id) contents = setValue(contents, 'GOOGLE_CLIENT_ID', id);
   }
 
-  if (!valueOf(contents, 'GOOGLE_CLIENT_SECRET')) {
-    const secret = await ask('  Client secret (hidden as you type, starts GOCSPX-): ', { hidden: true });
+  if (needsSecret) {
+    if (secretProblem) {
+      console.log(`  ${yellow('! The client secret in .env looks wrong:')} ${secretProblem}`);
+    }
+    const secret = await askUntilValid(
+      '  Client secret (hidden as you type, starts GOCSPX-): ',
+      describeBadSecret,
+      { hidden: true },
+    );
     if (secret) {
-      if (!secret.startsWith('GOCSPX-')) {
-        console.log(`  ${yellow('! That does not start with GOCSPX- — saved anyway.')}`);
-      }
       contents = setValue(contents, 'GOOGLE_CLIENT_SECRET', secret);
       console.log(`  ${green('✓')} saved to .env, never printed`);
     }
   }
 
+  return await askPublishingStatus(contents);
+}
+
+async function askPublishingStatus(contents) {
   // Not cosmetic: left at `testing`, a published app shows a permanent "expires in 7 days"
   // warning that is false, and a warning that cries wolf is one nobody reads when it is real.
   const published = await ask(
     `\n  Have you published the OAuth app to Production? ${dim('(y/N)')} `,
   );
-  contents = setValue(
+  return setValue(
     contents,
     'GOOGLE_OAUTH_PUBLISHING_STATUS',
     /^y/i.test(published) ? 'production' : 'testing',
   );
-
-  return contents;
 }
 
 async function main() {
