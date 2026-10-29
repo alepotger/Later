@@ -68,6 +68,14 @@ export type Env = Record<string, string | undefined>;
  */
 const FIXTURE_PLACEHOLDER = 'fixtures-mode-placeholder-not-a-secret';
 
+/**
+ * Fallbacks for when LLM_MODEL is unset.
+ *
+ * These age. A provider retires a model ID and the default starts returning 404 — which looks
+ * like a broken key or a broken deployment rather than a stale string, because nothing about
+ * the symptom points at a name written months earlier. Set LLM_MODEL explicitly if Tier 2
+ * starts failing; the 404 path logs how to find a current name.
+ */
 const DEFAULT_MODELS: Record<string, string> = {
   gemini: 'gemini-2.5-flash',
   'openai-compatible': 'gpt-4o-mini',
