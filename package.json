@@ -24,8 +24,8 @@
     "start": "node dist/later.js",
     "db:generate": "drizzle-kit generate",
     "db:apply:remote": "wrangler d1 migrations apply later-db --remote",
-    "deploy": "wrangler d1 migrations apply later-db --remote && wrangler deploy",
-    "setup": "node scripts/setup.mjs",
+    "deploy:worker": "wrangler d1 migrations apply later-db --remote && wrangler deploy",
+    "configure": "node scripts/setup.mjs",
     "deploy:cloudflare": "bash scripts/deploy-cloudflare.sh"
   },
   "dependencies": {

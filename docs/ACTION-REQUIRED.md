@@ -860,3 +860,22 @@ The most likely way you would have hit this: publishing your OAuth app to Produc
 **If you already deployed by hand**, add this one variable — dashboard: **Workers & Pages** → **later** → **Settings** → **Variables and Secrets** → **Add**, type **Text**, name `GOOGLE_OAUTH_PUBLISHING_STATUS`, value `production`, then **Deploy**. Or just re-run `pnpm deploy:cloudflare`, which is idempotent and fixes every variable at once.
 
 **If you have not deployed yet**, there is nothing to do. Set the values in `.env` and run the script.
+
+---
+
+## Correction — 2026-10-29: `pnpm setup` was the wrong command
+
+**`setup` and `deploy` are both reserved pnpm commands.** A package.json script with either name is silently shadowed: `pnpm setup` runs pnpm's own installer-configuration command, writes a `PNPM_HOME` line into your shell profile, and reports success. This project's setup script never runs, no `.env` is created, and nothing says anything is wrong.
+
+Found when a first-time deployer followed the instructions exactly and got pnpm's shell-configuration output instead of the expected questions.
+
+**Renamed, everywhere:**
+
+| Was | Now |
+|---|---|
+| `pnpm setup` | `pnpm configure` |
+| `pnpm run deploy` | `pnpm deploy:worker` |
+
+`pnpm deploy:cloudflare` is unchanged — a colon-suffixed name cannot collide with a built-in.
+
+**If you ran `pnpm setup` before this correction:** no harm done. It added two lines to your `~/.zshrc` setting `PNPM_HOME`, which is a normal pnpm configuration and safe to keep. Just run `pnpm configure` and carry on. Every instruction above that says `pnpm setup` should read `pnpm configure`.

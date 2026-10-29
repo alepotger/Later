@@ -28,12 +28,12 @@ Then follow **[Batch 4](docs/ACTION-REQUIRED.md#batch-4--deploy)**, which has th
 
 ```bash
 pnpm install
-pnpm setup                     # generates your secrets, then asks for the two Google values
+pnpm configure                     # generates your secrets, then asks for the two Google values
 pnpm exec wrangler login       # opens a browser, once
 pnpm deploy:cloudflare
 ```
 
-`pnpm setup` asks for the client ID and secret rather than telling you to edit a file. The secret goes into a hidden prompt — not echoed, not in your shell history.
+`pnpm configure` asks for the client ID and secret rather than telling you to edit a file. The secret goes into a hidden prompt — not echoed, not in your shell history.
 
 `pnpm deploy:cloudflare` does everything a machine can: creates the D1 database, writes its real ID into `wrangler.jsonc`, **sends your whole `.env` to the Worker**, applies migrations, deploys, reads back the `workers.dev` origin, redeploys with `PUBLIC_BASE_URL` set to it, and checks `/healthz`. Then it prints the one URI you must register with Google.
 
@@ -79,7 +79,7 @@ pnpm exec wrangler secret put INGEST_TOKEN         # SOLO only; MULTI mints per-
 pnpm exec wrangler secret put TOKEN_ENCRYPTION_KEY
 pnpm exec wrangler secret put SESSION_SECRET
 
-pnpm run deploy                                     # migrations, then deploy
+pnpm deploy:worker                                     # migrations, then deploy
 pnpm exec wrangler deploy --var PUBLIC_BASE_URL:https://later.<your-subdomain>.workers.dev
 ```
 
@@ -95,7 +95,7 @@ pnpm exec wrangler deploy --var PUBLIC_BASE_URL:https://later.<your-subdomain>.w
 
 ```bash
 git clone https://github.com/alepotger/Later.git && cd Later
-pnpm setup                # generates .env and your three secrets
+pnpm configure                # generates .env and your three secrets
 # paste GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET into .env
 docker compose up -d --build
 ```

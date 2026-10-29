@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `pnpm setup` — write a .env with the three generated secrets already filled in.
+ * `pnpm configure` — write a .env with the three generated secrets already filled in.
  *
  * These three are pure entropy: there is nothing to decide, nothing to look up, and no reason a
  * human should be running `openssl` three times and pasting the results into the right lines.
@@ -177,7 +177,7 @@ async function main() {
 
       ${bold('docs/ACTION-REQUIRED.md')}  ${dim('— Batch 1')}
 
-  Add them to ${bold('.env')} by hand, or run ${bold('pnpm setup')} again to be asked.
+  Add them to ${bold('.env')} by hand, or run ${bold('pnpm configure')} again to be asked.
 
   ${bold('Want to see Later work before doing any of that?')} You do not need them:
 

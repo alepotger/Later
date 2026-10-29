@@ -58,7 +58,7 @@ Later will warn you constantly if you choose Testing, and will notify you with a
 ## Step 2 — Configure
 
 ```bash
-pnpm setup
+pnpm configure
 ```
 
 That creates `.env`, generates the three secrets — `INGEST_TOKEN`, `TOKEN_ENCRYPTION_KEY`, `SESSION_SECRET` — directly into it, then **asks you for the two Google values and your publishing status**. The client secret is typed into a hidden prompt: it is not echoed to the screen, so it stays out of your scrollback and out of any screen share. There is no file to hand-edit.
@@ -76,7 +76,7 @@ The two values it asks for are the ones no script can produce, because they only
 
 Press Enter at either prompt to skip it and edit `.env` by hand later. Every other variable is documented inline in the file and has a working default.
 
-In `MULTI` mode `INGEST_TOKEN` is ignored — each account mints its own from the web UI — but `pnpm setup` generates it anyway, so switching modes later needs no extra step.
+In `MULTI` mode `INGEST_TOKEN` is ignored — each account mints its own from the web UI — but `pnpm configure` generates it anyway, so switching modes later needs no extra step.
 
 **Keep `TOKEN_ENCRYPTION_KEY` somewhere safe.** It decrypts your stored Google token. Lose it and you re-authorise; there's no other consequence, but it's avoidable annoyance.
 
@@ -199,7 +199,7 @@ Current state is always in [PLAN.md](PLAN.md).
 
 | | |
 |---|---|
-| `pnpm setup` | Create `.env` and generate the three secrets |
+| `pnpm configure` | Create `.env` and generate the three secrets |
 | `pnpm dev` | Run locally with reload |
 | `USE_FIXTURES=true pnpm dev` | Run with no credentials, against recorded responses |
 | `pnpm check` | Format, lint, typecheck, test |

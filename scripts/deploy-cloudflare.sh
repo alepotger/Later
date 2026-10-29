@@ -55,7 +55,7 @@ REQUIRED_KEYS=(GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET TOKEN_ENCRYPTION_KEY SESSIO
 contains() { local n="$1"; shift; for e in "$@"; do [ "$e" = "$n" ] && return 0; done; return 1; }
 
 # ── Preconditions ────────────────────────────────────────────────────────────
-[ -f .env ] || die "No .env found. Run 'pnpm setup' first, then fill in the two Google values."
+[ -f .env ] || die "No .env found. Run 'pnpm configure' first, then fill in the two Google values."
 
 # Read .env without sourcing it — a stray backtick or $( in a secret would otherwise execute.
 env_value() {
@@ -72,11 +72,11 @@ done
 ok "Google OAuth client present"
 
 for key in TOKEN_ENCRYPTION_KEY SESSION_SECRET; do
-  [ -n "$(env_value "$key")" ] || die "$key is empty in .env. Run 'pnpm setup' to generate it."
+  [ -n "$(env_value "$key")" ] || die "$key is empty in .env. Run 'pnpm configure' to generate it."
 done
 # INGEST_TOKEN is required in SOLO and ignored in MULTI, where each account mints its own.
 if [ "$(env_value LATER_MODE)" != "MULTI" ] && [ -z "$(env_value INGEST_TOKEN)" ]; then
-  die "INGEST_TOKEN is empty in .env. Run 'pnpm setup' to generate it."
+  die "INGEST_TOKEN is empty in .env. Run 'pnpm configure' to generate it."
 fi
 ok "Generated secrets present"
 
