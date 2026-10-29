@@ -100,6 +100,15 @@ export async function resolveHigherTiers(deps: TierDeps, text: string): Promise<
 
   const best = candidates[0];
   if (!best) {
+    // Logged because this branch is reached three ways — the model shrugged, the call threw,
+    // or no provider was really wired up — and they need completely different fixes. The
+    // provider's own logging says which; this says the pipeline got here at all.
+    deps.logger.info('tier 2 produced no candidates', {
+      tier: 2,
+      provider: deps.config.llm.provider,
+      model: deps.config.llm.model,
+      textLength: combined.length,
+    });
     return {
       kind: 'none',
       reason: 'Could not work out which video that refers to.',

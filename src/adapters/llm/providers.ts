@@ -34,16 +34,30 @@ interface ProviderDeps {
 async function withTimeout<T>(
   work: (signal: AbortSignal) => Promise<T>,
   ms: number,
+  onError: (error: unknown) => void,
 ): Promise<T | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
   try {
     return await work(controller.signal);
-  } catch {
+  } catch (error) {
+    // Never silent. A bare `catch { return null }` here made a DNS failure, an abort and a
+    // malformed response indistinguishable from "the model had no idea" — all three surfaced
+    // to the user as the same sentence, with nothing in the logs to tell them apart.
+    onError(error);
     return null;
   } finally {
     clearTimeout(timer);
   }
+}
+
+function describeThrow(error: unknown): string {
+  if (error instanceof Error) {
+    return error.name === 'AbortError'
+      ? `timed out after ${TIMEOUT_MS}ms`
+      : `${error.name}: ${error.message}`;
+  }
+  return String(error);
 }
 
 export function geminiLlm(options: { apiKey: string; model: string }, deps: ProviderDeps): LlmPort {
@@ -85,10 +99,20 @@ export function geminiLlm(options: { apiKey: string; model: string }, deps: Prov
           candidates?: { content?: { parts?: { text?: string }[] } }[];
         };
         return payload.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
-      }, TIMEOUT_MS);
+      }, TIMEOUT_MS, (error) => {
+        deps.logger.warn('gemini call threw', {
+          model: options.model,
+          error: describeThrow(error),
+        });
+      });
 
       if (text === null) return [];
-      return parseCandidates(text);
+      const candidates = parseCandidates(text);
+      deps.logger.info('gemini returned candidates', {
+        count: candidates.length,
+        ...(candidates.length === 0 ? { rawPrefix: text.slice(0, 200) } : {}),
+      });
+      return candidates;
     },
   };
 }
@@ -137,10 +161,21 @@ export function openAiCompatibleLlm(
           choices?: { message?: { content?: string } }[];
         };
         return payload.choices?.[0]?.message?.content ?? null;
-      }, TIMEOUT_MS);
+      }, TIMEOUT_MS, (error) => {
+        deps.logger.warn('llm call threw', {
+          endpoint,
+          model: options.model,
+          error: describeThrow(error),
+        });
+      });
 
       if (text === null) return [];
-      return parseCandidates(text);
+      const candidates = parseCandidates(text);
+      deps.logger.info('llm returned candidates', {
+        count: candidates.length,
+        ...(candidates.length === 0 ? { rawPrefix: text.slice(0, 200) } : {}),
+      });
+      return candidates;
     },
   };
 }
