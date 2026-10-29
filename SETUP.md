@@ -206,6 +206,7 @@ Current state is always in [PLAN.md](PLAN.md).
 | `pnpm dev` | Run locally with reload |
 | `USE_FIXTURES=true pnpm dev` | Run with no credentials, against recorded responses |
 | `pnpm check` | Format, lint, typecheck, test |
+| `pnpm check:llm` | Ask your Tier 2 provider one real question and print what it said |
 | `pnpm test` | Tests in watch mode |
 | `pnpm db:generate` | Regenerate migrations after a schema change |
 | `pnpm deploy:cloudflare` | Scripted deploy: D1, secrets, migrations, `PUBLIC_BASE_URL` |

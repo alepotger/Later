@@ -174,7 +174,9 @@ Either set up Tier 2 (`LLM_PROVIDER=gemini` + `GEMINI_API_KEY`) or accept the re
 
 ## "Tier 2 is configured but every description still comes back unresolvable"
 
-Read the logs before changing anything. On Cloudflare: `pnpm exec wrangler tail`, then share something. On Docker: `docker compose logs -f`. You are looking for one of three lines.
+**Run `pnpm check:llm` first.** It asks your configured provider one real question — the same prompt the pipeline uses, through the same adapter — and prints either the video it named or the provider's own explanation of why it refused, with what to do about it. No deploying, no log tailing, about two seconds. It reads `.env`, so run it wherever that file is.
+
+If you would rather read the logs directly — on Cloudflare `pnpm exec wrangler tail`, on Docker `docker compose logs -f`, then share something — you are looking for one of three lines.
 
 **`gemini call failed`** — the API answered and refused. The `apiMessage` field is Google's own sentence; believe it over the status code.
 

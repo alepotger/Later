@@ -915,3 +915,5 @@ Worse, the same account returned **404** to one call and **402** to the next, so
 **The default stays `gemini`** when a provider is configured. Not because it is free — nothing is — but because it lives in the Google Cloud project you already made for YouTube, which is still one fewer account to create. [ADR-0009](adr/0009-llm-provider-and-the-gemini-question.md) records the revision in full, including the fact that its own "Revisit if the free tier disappears" clause is what fired.
 
 Every sentence above that calls Gemini free is wrong. This file is append-only, so they stay where they are; this note supersedes them.
+
+**Added with that correction: `pnpm check:llm`.** Run it in the project folder and it asks your configured provider one real question — the same prompt Tier 2 uses, through the same code — then prints either the video it named or the provider's own sentence explaining the refusal, with the next step. Two seconds, no deploy, no log reading. Every instruction above that has you deploy and share something to find out whether Tier 2 works can be replaced by this.

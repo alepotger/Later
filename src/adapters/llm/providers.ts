@@ -19,7 +19,7 @@ import {
   type LlmPort,
   parseCandidates,
 } from '../../ports/llm.ts';
-import type { Logger } from '../../ports/logger.ts';
+import type { LogFields, Logger } from '../../ports/logger.ts';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -49,6 +49,36 @@ async function withTimeout<T>(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Read what the API actually said, rather than inferring from the status code.
+ *
+ * A depleted-credits Gemini account was observed returning 404 to one call and 402 to the next,
+ * so a status-based guess sent the operator hunting a retired model id while the body said
+ * "Your prepayment credits are depleted" in plain English. The body is small, it is the only
+ * authoritative account of the failure, and guessing at it costs more than reading it.
+ *
+ * Both error shapes are handled — Google's `{error:{message,status}}` and OpenAI's
+ * `{error:{message,type,code}}` — because every provider here can fail for billing reasons and
+ * the operator should not have to know whose JSON they are looking at.
+ */
+async function readErrorDetail(response: Response): Promise<LogFields> {
+  return response
+    .text()
+    .then((raw) => {
+      const parsed = JSON.parse(raw) as {
+        error?: { message?: string; status?: string; type?: string; code?: string | number };
+      };
+      const error = parsed.error;
+      if (!error) return {};
+      const kind = error.status ?? error.type;
+      return {
+        ...(error.message ? { apiMessage: error.message.trim() } : {}),
+        ...(kind ? { apiStatus: kind } : {}),
+      };
+    })
+    .catch(() => ({}));
 }
 
 function describeThrow(error: unknown): string {
@@ -92,27 +122,10 @@ export function geminiLlm(options: { apiKey: string; model: string }, deps: Prov
           );
 
           if (!response.ok) {
-            // Read what the API actually said rather than inferring from the status code.
-            // A depleted-credits account was observed returning 404 to one call and 402 to the
-            // next, so status-based guesses sent the operator hunting a retired model id while
-            // the body said "Your prepayment credits are depleted" in plain English. The body
-            // is small, it is the only authoritative account of the failure, and guessing at
-            // it costs more than reading it.
-            const detail = await response
-              .text()
-              .then((raw) => {
-                const parsed = JSON.parse(raw) as { error?: { message?: string; status?: string } };
-                return {
-                  ...(parsed.error?.message ? { apiMessage: parsed.error.message.trim() } : {}),
-                  ...(parsed.error?.status ? { apiStatus: parsed.error.status } : {}),
-                };
-              })
-              .catch(() => ({}));
-
             deps.logger.warn('gemini call failed', {
               status: response.status,
               model: options.model,
-              ...detail,
+              ...(await readErrorDetail(response)),
             });
             return null;
           }
@@ -179,7 +192,11 @@ export function openAiCompatibleLlm(
           });
 
           if (!response.ok) {
-            deps.logger.warn('llm call failed', { status: response.status, endpoint });
+            deps.logger.warn('llm call failed', {
+              status: response.status,
+              endpoint,
+              ...(await readErrorDetail(response)),
+            });
             return null;
           }
 
