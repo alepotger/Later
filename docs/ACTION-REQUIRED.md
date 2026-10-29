@@ -879,3 +879,39 @@ Found when a first-time deployer followed the instructions exactly and got pnpm'
 `pnpm deploy:cloudflare` is unchanged — a colon-suffixed name cannot collide with a built-in.
 
 **If you ran `pnpm setup` before this correction:** no harm done. It added two lines to your `~/.zshrc` setting `PNPM_HOME`, which is a normal pnpm configuration and safe to keep. Just run `pnpm configure` and carry on. Every instruction above that says `pnpm setup` should read `pnpm configure`.
+
+---
+
+## Correction to Batch 3 — 2026-10-29: Gemini is not free
+
+**Batch 3 above says `gemini-2.5-flash` "is on the free tier" (step 2). That is no longer true, and it cost a first-time deployer an evening.**
+
+What actually happens on a fresh Google Cloud project with a new Gemini API key:
+
+```json
+{
+  "error": {
+    "code": 402,
+    "message": "Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing.",
+    "status": "RESOURCE_EXHAUSTED"
+  }
+}
+```
+
+The key is valid. The API is enabled. The model id is current. There is simply no free allowance to spend.
+
+Worse, the same account returned **404** to one call and **402** to the next, so the status code alone sent the diagnosis off after a retired model id while the body said the real reason in plain English. Later now logs `error.message` and `error.status` from the response body rather than inferring from the status code, so the next person reads the actual sentence Google sent.
+
+**What this does and does not break.** Tier 0 (a YouTube link in the share) and Tier 1 (a link in the TikTok/Reel caption that oEmbed returns) are free and need no LLM at all. They handle any share whose text already contains the link. Only **Tier 2** — working out which video a share *describes* without linking it — needs the model.
+
+**Your three options, honestly:**
+
+| | What it costs | What you get |
+|---|---|---|
+| **Add credits to the Gemini project** at https://ai.studio/projects | A card, then cents. One Tier 2 call is a few hundred tokens of Flash. | Tier 2 works as designed. |
+| **Point `LLM_PROVIDER=openai-compatible` at a hosted endpoint** (OpenAI, OpenRouter, anything speaking `/chat/completions`) | Whatever that provider charges. | Same thing, different bill. A *local* Ollama will not work on Cloudflare Workers — a Worker cannot reach your laptop — so this route needs the Docker/self-host deployment. |
+| **Leave `LLM_PROVIDER=none`** | Nothing. | Tiers 0 and 1 only. Shares with no link anywhere in the text are saved as unresolvable, and re-sharing them later retries, so nothing is lost if you add a provider afterwards. |
+
+**The default stays `gemini`** when a provider is configured. Not because it is free — nothing is — but because it lives in the Google Cloud project you already made for YouTube, which is still one fewer account to create. [ADR-0009](adr/0009-llm-provider-and-the-gemini-question.md) records the revision in full, including the fact that its own "Revisit if the free tier disappears" clause is what fired.
+
+Every sentence above that calls Gemini free is wrong. This file is append-only, so they stay where they are; this note supersedes them.

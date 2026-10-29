@@ -194,8 +194,11 @@ async function promptForLlm(contents) {
 
   console.log(`\n  ${bold('Optional: resolve videos that are described but not linked.')}`);
   console.log(`  ${dim('A Reel saying "that Kurzgesagt one about black holes" with no URL needs a')}`);
-  console.log(`  ${dim('language model to turn it into a search. Free key, ~3 minutes:')}`);
+  console.log(`  ${dim('language model to turn it into a search. ~3 minutes to set up:')}`);
   console.log(`  ${dim('https://aistudio.google.com/apikey  → "Create API key"')}`);
+  console.log(`  ${dim('Gemini bills this per call and needs credits on the project — it is')}`);
+  console.log(`  ${dim('no longer free. Tiers 0 and 1 cost nothing and handle any share whose')}`);
+  console.log(`  ${dim('text already contains a YouTube link, which is most of them.')}`);
   console.log(`  ${dim('Press Enter to skip — everything else works without it.')}\n`);
 
   const key = await askUntilValid(

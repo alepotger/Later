@@ -172,6 +172,28 @@ Almost certainly no LLM configured (`LLM_PROVIDER=none`, the default) *and* the 
 
 Either set up Tier 2 (`LLM_PROVIDER=gemini` + `GEMINI_API_KEY`) or accept the review step for those shares. If shares that *do* contain a URL are landing in review, that's a Tier 0 bug — **please open an issue with the URL**.
 
+## "Tier 2 is configured but every description still comes back unresolvable"
+
+Read the logs before changing anything. On Cloudflare: `pnpm exec wrangler tail`, then share something. On Docker: `docker compose logs -f`. You are looking for one of three lines.
+
+**`gemini call failed`** — the API answered and refused. The `apiMessage` field is Google's own sentence; believe it over the status code.
+
+| What `apiMessage` says | What it means |
+|---|---|
+| `Your prepayment credits are depleted` | **The most common one.** The Gemini API is not free. Your key is fine; there is nothing to spend. Add credits at **https://ai.studio/projects** — one Tier 2 call is a few hundred tokens of Flash, so this is cents, not a subscription. |
+| something about an unknown or unsupported model | `LLM_MODEL` names a retired id. `.env.example` has a one-liner that lists the models your key can actually use. |
+| `API key not valid` | The key is wrong or was revoked. Regenerate it. |
+
+Do **not** diagnose Tier 2 from the HTTP status alone. A credit-exhausted account was observed returning `404` to one call and `402` to the next for the same underlying problem, which sends you hunting a model name that was never wrong. That is why Later logs the body.
+
+**`gemini call threw`** — nothing came back: a timeout (12s), DNS, or a blocked egress. Check that your host can reach `generativelanguage.googleapis.com`.
+
+**`LLM_PROVIDER=gemini but GEMINI_API_KEY is empty`** — the key never reached the running instance. On Cloudflare this usually means it is in your local `.env` but was never uploaded as a secret; re-run `pnpm deploy:cloudflare`, which sends every key in `.env`.
+
+**No Tier 2 line at all, and `tier 2 produced no candidates`** instead: the model ran and genuinely could not name a video from that text. That is a legitimate outcome, not a fault — some captions do not identify anything.
+
+**Fixed it? Share the same thing again.** A re-share of a failed item retries it rather than replaying the old error.
+
 ## "Duplicates got added twice"
 
 This shouldn't be possible — a `UNIQUE(account_id, video_id)` constraint prevents it, and it's tested. Note that YouTube itself stopped rejecting duplicate inserts in 2016, so Later's constraint is the only guard.

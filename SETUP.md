@@ -183,12 +183,14 @@ Being straight about this so you know what you're getting:
 | Token expiry detection and re-auth | ✅ works |
 | iOS Shortcut · Android PWA · Telegram bot | ✅ built (needs a reachable URL) |
 | Notifications (Telegram / webhook) | ✅ works |
-| Resolving a caption that *describes* a video | ✅ works (needs an LLM key for Tier 2) |
+| Resolving a caption that *describes* a video | ✅ works (needs a **paid** LLM key for Tier 2 — see below) |
 | Resolving a video named only in speech or on-screen text | ❌ not built — Tier 3 is a config flag with no code |
 | One-click deploy · `docker compose up` | ✅ works — see [DEPLOY.md](DEPLOY.md) |
 | Several people on one instance (`LATER_MODE=MULTI`) | ✅ works |
 
-Two things have never been run for real by the author: a live Google OAuth round-trip, and a Docker image build (this development environment has no Docker daemon). Both are written and tested against stubs. If either fails for you, that is worth an issue — see [PLAN.md](PLAN.md).
+**Tier 2 costs money.** The Gemini API has no free allowance for a new project: it answers `402 — "Your prepayment credits are depleted"` until you add credits at [ai.studio/projects](https://ai.studio/projects). It is cents per call, not a subscription, but it does need a card. Tiers 0 and 1 are free, need no key, and handle every share whose text already contains the link — which is most of them. Leaving `LLM_PROVIDER=none` is a perfectly good configuration. Earlier versions of these docs called Gemini free; that was true when written and is not now.
+
+One thing has never been run for real by the author: a Docker image build (this development environment has no Docker daemon). It is written and tested against stubs. If it fails for you, that is worth an issue — see [PLAN.md](PLAN.md). The Google OAuth round-trip *has* now been completed live against a deployed Worker.
 
 Current state is always in [PLAN.md](PLAN.md).
 
