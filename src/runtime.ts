@@ -89,9 +89,14 @@ function buildLlm(config: Config, logger: Logger, fetchImpl?: typeof fetch): Llm
   const deps = { logger, ...(fetchImpl ? { fetch: fetchImpl } : {}) };
   switch (config.llm.provider) {
     case 'gemini':
-      return config.llm.geminiApiKey
-        ? geminiLlm({ apiKey: config.llm.geminiApiKey, model: config.llm.model }, deps)
-        : noopLlm;
+      if (!config.llm.geminiApiKey) {
+        // Silently returning noopLlm made a missing key look like a model that had no ideas.
+        logger.warn('LLM_PROVIDER=gemini but GEMINI_API_KEY is empty — Tier 2 is disabled', {
+          effect: 'shares without a YouTube link will say so rather than be resolved',
+        });
+        return noopLlm;
+      }
+      return geminiLlm({ apiKey: config.llm.geminiApiKey, model: config.llm.model }, deps);
     case 'openai-compatible':
       return config.llm.openaiBaseUrl
         ? openAiCompatibleLlm(
