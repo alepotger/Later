@@ -182,7 +182,7 @@ If you would rather read the logs directly — on Cloudflare `pnpm exec wrangler
 
 | What `apiMessage` says | What it means |
 |---|---|
-| `no longer available to new users` or anything about an unknown model | **The one that actually bit.** `LLM_MODEL` names a retired id. Google retires models *for new keys first*, so this breaks first-time setup while every existing deployment carries on fine. The message names the replacement; `pnpm check:llm` pulls it out and also lists what your key can use. |
+| `no longer available to new users` or anything about an unknown model | **The one that actually bit** — though it no longer stops anything. `LLM_MODEL` names a retired id; Google retires models *for new keys first*, so this breaks first-time setup while every existing deployment carries on fine. Later now retries with the replacement Google names and keeps going, logging `gemini model retired`. Set `LLM_MODEL` to the named model to skip the wasted request. |
 | `Your prepayment credits are depleted` | No credit on the project. Add some at **https://ai.studio/projects** — one Tier 2 call is a few hundred tokens of Flash, so this is cents, not a subscription. |
 | `API key not valid` | The key is wrong or was revoked. Regenerate it. |
 

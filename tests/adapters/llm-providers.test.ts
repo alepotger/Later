@@ -12,7 +12,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { geminiLlm, openAiCompatibleLlm } from '../../src/adapters/llm/providers.ts';
+import {
+  geminiLlm,
+  namedReplacementModel,
+  openAiCompatibleLlm,
+} from '../../src/adapters/llm/providers.ts';
 import type { LogFields, Logger } from '../../src/ports/logger.ts';
 
 interface Line {
@@ -51,6 +55,50 @@ const DEPLETED = JSON.stringify({
     status: 'RESOURCE_EXHAUSTED',
   },
 });
+
+/** Google's actual wording, which names the model to move to. */
+const RETIRED = JSON.stringify({
+  error: {
+    code: 404,
+    message:
+      'This model models/gemini-2.5-flash is no longer available to new users. ' +
+      'Please update your code to use models/gemini-3.8-flash for the latest features.',
+    status: 'NOT_FOUND',
+  },
+});
+
+const ANSWER = JSON.stringify({
+  candidates: [
+    {
+      content: {
+        parts: [
+          {
+            text: JSON.stringify({
+              candidates: [
+                { titleGuess: 'How Do Planes Fly?', channelGuess: 'Veritasium', confidence: 0.8 },
+              ],
+            }),
+          },
+        ],
+      },
+    },
+  ],
+});
+
+/** Answers each request from the queue, recording which model each one asked for. */
+function scripted(replies: { status: number; body: string }[]): {
+  fetch: typeof fetch;
+  models: string[];
+} {
+  const models: string[] = [];
+  const impl = (async (input: string | URL | Request) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    models.push(decodeURIComponent(url.split('/models/')[1]?.split(':')[0] ?? ''));
+    const next = replies.shift() ?? { status: 500, body: '{}' };
+    return new Response(next.body, { status: next.status });
+  }) as unknown as typeof fetch;
+  return { fetch: impl, models };
+}
 
 describe('gemini adapter failure reporting', () => {
   it('logs the message the API sent, not just the status', async () => {
@@ -131,6 +179,89 @@ describe('gemini adapter failure reporting', () => {
     expect(lines.find((line) => line.message === 'gemini call threw')?.fields.error).toBe(
       'TypeError: fetch failed',
     );
+  });
+});
+
+describe('a retired model id heals itself', () => {
+  it('retries with the replacement Google names, and succeeds', async () => {
+    const { logger, lines } = recordingLogger();
+    const { fetch: impl, models } = scripted([
+      { status: 404, body: RETIRED },
+      { status: 200, body: ANSWER },
+    ]);
+    const llm = geminiLlm({ apiKey: 'k', model: 'gemini-2.5-flash' }, { logger, fetch: impl });
+
+    const candidates = await llm.extractCandidates(INPUT);
+
+    expect(models).toEqual(['gemini-2.5-flash', 'gemini-3.8-flash']);
+    expect(candidates).toHaveLength(1);
+    expect(lines.find((line) => line.message.includes('retired'))?.fields).toMatchObject({
+      configured: 'gemini-2.5-flash',
+      replacement: 'gemini-3.8-flash',
+      action: 'set LLM_MODEL=gemini-3.8-flash',
+    });
+  });
+
+  it('learns once — later calls go straight to the replacement', async () => {
+    // Otherwise every single ingest pays for a failed request first, which is a quiet tax on
+    // a deployment whose only symptom is that it was always a bit slower than it should be.
+    const { logger } = recordingLogger();
+    const { fetch: impl, models } = scripted([
+      { status: 404, body: RETIRED },
+      { status: 200, body: ANSWER },
+      { status: 200, body: ANSWER },
+    ]);
+    const llm = geminiLlm({ apiKey: 'k', model: 'gemini-2.5-flash' }, { logger, fetch: impl });
+
+    await llm.extractCandidates(INPUT);
+    await llm.extractCandidates(INPUT);
+
+    expect(models).toEqual(['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-3.8-flash']);
+  });
+
+  it('gives up after one retry rather than chasing a chain', async () => {
+    const { logger, lines } = recordingLogger();
+    const { fetch: impl, models } = scripted([
+      { status: 404, body: RETIRED },
+      { status: 404, body: RETIRED },
+    ]);
+    const llm = geminiLlm({ apiKey: 'k', model: 'gemini-2.5-flash' }, { logger, fetch: impl });
+
+    expect(await llm.extractCandidates(INPUT)).toEqual([]);
+    expect(models).toHaveLength(2);
+    expect(lines.filter((line) => line.message === 'gemini call failed')).toHaveLength(1);
+  });
+
+  it('does not retry a failure that names no replacement', async () => {
+    const { logger } = recordingLogger();
+    const { fetch: impl, models } = scripted([{ status: 402, body: DEPLETED }]);
+    const llm = geminiLlm({ apiKey: 'k', model: 'gemini-2.5-flash' }, { logger, fetch: impl });
+
+    expect(await llm.extractCandidates(INPUT)).toEqual([]);
+    expect(models).toEqual(['gemini-2.5-flash']);
+  });
+});
+
+describe('namedReplacementModel', () => {
+  it('takes the replacement, not the dead id earlier in the same sentence', () => {
+    expect(
+      namedReplacementModel(
+        'This model models/gemini-2.5-flash is no longer available to new users. ' +
+          'Please update your code to use models/gemini-3.8-flash for the latest features.',
+      ),
+    ).toBe('gemini-3.8-flash');
+  });
+
+  it('strips sentence-final punctuation without touching version dots', () => {
+    expect(namedReplacementModel('Please use models/gemini-4-pro.')).toBe('gemini-4-pro');
+    expect(namedReplacementModel('use models/gemini-2.5-flash-lite-preview-09-2025, which')).toBe(
+      'gemini-2.5-flash-lite-preview-09-2025',
+    );
+  });
+
+  it('finds nothing when nothing is named', () => {
+    expect(namedReplacementModel('models/foo is not found for API version v1beta')).toBeUndefined();
+    expect(namedReplacementModel(undefined)).toBeUndefined();
   });
 });
 

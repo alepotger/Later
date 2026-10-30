@@ -4,8 +4,7 @@
  * Two implementations behind one interface, both plain `fetch` so they run unchanged on
  * Workers. Gemini is the default when a provider is configured — not on model quality, but
  * because it lives in the *same Google Cloud project* the deployer already created for
- * YouTube, which is one fewer account to make. It is not free; nothing here is. See
- * docs/adr/0009 and its 2026-10-29 revision.
+ * YouTube, which is one fewer account to make. See docs/adr/0009 and its revisions.
  *
  * Neither ever throws for a bad response. A Tier 2 miss sends the item to review; it must not
  * take down the pipeline.
@@ -23,7 +22,11 @@ import type { LogFields, Logger } from '../../ports/logger.ts';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
-/** One call per item, no retries. Cost and latency stay bounded and predictable. */
+/**
+ * Budget for the whole attempt, retry included. Cost and latency stay bounded and predictable:
+ * there is no retry for a flaky network — only the one for a model id the API itself replaced,
+ * which is a different request rather than the same one hopefully going better.
+ */
 const TIMEOUT_MS = 12_000;
 
 interface ProviderDeps {
@@ -81,6 +84,22 @@ async function readErrorDetail(response: Response): Promise<LogFields> {
     .catch(() => ({}));
 }
 
+/**
+ * The replacement model a provider names in its own rejection, if it names one.
+ *
+ * Google retires a model for *new* keys first and says what to use instead:
+ *
+ *   "This model models/gemini-2.5-flash is no longer available to new users.
+ *    Please update your code to use models/gemini-3.8-flash"
+ *
+ * Anchored on "use models/…" so it takes the replacement rather than the dead id earlier in
+ * the same sentence. The trailing strip handles an id that ends the sentence — version numbers
+ * make dots legal inside the name, so the character class cannot simply exclude them.
+ */
+export function namedReplacementModel(apiMessage: string | undefined): string | undefined {
+  return /\buse\s+models\/([\w.-]+)/i.exec(apiMessage ?? '')?.[1]?.replace(/[.,;:]+$/, '');
+}
+
 function describeThrow(error: unknown): string {
   if (error instanceof Error) {
     return error.name === 'AbortError'
@@ -92,6 +111,28 @@ function describeThrow(error: unknown): string {
 
 export function geminiLlm(options: { apiKey: string; model: string }, deps: ProviderDeps): LlmPort {
   const fetchImpl = deps.fetch ?? fetch;
+
+  /**
+   * The model actually being called, which can differ from the configured one.
+   *
+   * Google retires models for new API keys before existing ones, so a default written months
+   * ago keeps working for everyone already deployed and fails for everyone setting up. That is
+   * exactly what happened here, and the person it happens to has no way to know the string is
+   * the problem. When the API names its own replacement, using it is not a guess.
+   *
+   * Sticky for the life of the adapter so only the first call pays for the discovery. It is
+   * never written back to configuration: the operator is told, loudly, to set LLM_MODEL, and
+   * a fresh isolate re-learns it in one request if they do not.
+   */
+  let activeModel = options.model;
+
+  const callModel = (model: string, body: unknown, signal: AbortSignal) =>
+    fetchImpl(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': options.apiKey },
+      body: JSON.stringify(body),
+      signal,
+    });
 
   return {
     async extractCandidates(input: LlmInput): Promise<VideoCandidate[]> {
@@ -108,26 +149,43 @@ export function geminiLlm(options: { apiKey: string; model: string }, deps: Prov
 
       const text = await withTimeout(
         async (signal) => {
-          const response = await fetchImpl(
-            `${GEMINI_BASE}/models/${encodeURIComponent(options.model)}:generateContent`,
-            {
-              method: 'POST',
-              headers: {
-                'content-type': 'application/json',
-                'x-goog-api-key': options.apiKey,
-              },
-              body: JSON.stringify(body),
-              signal,
-            },
-          );
+          let response = await callModel(activeModel, body, signal);
 
           if (!response.ok) {
-            deps.logger.warn('gemini call failed', {
-              status: response.status,
-              model: options.model,
-              ...(await readErrorDetail(response)),
+            const detail = await readErrorDetail(response);
+            const message = typeof detail.apiMessage === 'string' ? detail.apiMessage : undefined;
+            const replacement = namedReplacementModel(message);
+
+            if (replacement === undefined || replacement === activeModel) {
+              deps.logger.warn('gemini call failed', {
+                status: response.status,
+                model: activeModel,
+                ...detail,
+              });
+              return null;
+            }
+
+            // Warn rather than info: the retry keeps Tier 2 working today, but the stale
+            // string is still in someone's configuration and will outlive this isolate.
+            deps.logger.warn('gemini model retired — retrying with the replacement it named', {
+              configured: activeModel,
+              replacement,
+              action: `set LLM_MODEL=${replacement}`,
+              ...detail,
             });
-            return null;
+            activeModel = replacement;
+
+            // One retry, inside the same timeout, so latency stays bounded. If the named
+            // replacement also fails there is nothing further to try.
+            response = await callModel(activeModel, body, signal);
+            if (!response.ok) {
+              deps.logger.warn('gemini call failed', {
+                status: response.status,
+                model: activeModel,
+                ...(await readErrorDetail(response)),
+              });
+              return null;
+            }
           }
 
           const payload = (await response.json()) as {
@@ -138,7 +196,7 @@ export function geminiLlm(options: { apiKey: string; model: string }, deps: Prov
         TIMEOUT_MS,
         (error) => {
           deps.logger.warn('gemini call threw', {
-            model: options.model,
+            model: activeModel,
             error: describeThrow(error),
           });
         },

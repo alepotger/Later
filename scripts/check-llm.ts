@@ -17,7 +17,11 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { geminiLlm, openAiCompatibleLlm } from '../src/adapters/llm/providers.ts';
+import {
+  geminiLlm,
+  namedReplacementModel,
+  openAiCompatibleLlm,
+} from '../src/adapters/llm/providers.ts';
 // The same defaults the running app uses, imported rather than copied: a check that tests a
 // different model from the one production falls back to is a check that lies.
 import { DEFAULT_MODELS } from '../src/config.ts';
@@ -146,12 +150,7 @@ async function interpret(apiMessage: string | undefined, provider: string): Prom
 
     // Google's retirement message names the replacement. Quote it first — it is the single
     // most useful sentence in this whole script, and it came from the API, not from me.
-    // Anchored on "use models/…" so it picks the *replacement*, not the broken id earlier in
-    // the same sentence. The trailing strip is for a model id that ends the sentence: version
-    // numbers mean dots are legal inside the name, so the pattern cannot simply exclude them.
-    const suggested = /\buse\s+models\/([\w.-]+)/i
-      .exec(apiMessage ?? '')?.[1]
-      ?.replace(/[.,;:]+$/, '');
+    const suggested = namedReplacementModel(apiMessage);
     if (suggested) {
       lines.push('', `  Google names the replacement itself: ${bold(suggested)}`);
       lines.push(`  Put ${bold(`LLM_MODEL=${suggested}`)} in .env and run this again.`);
@@ -244,6 +243,10 @@ async function main(): Promise<void> {
   // right for the pipeline and useless for a human, which is the whole reason for this script.
   const failure = captured.find((f) => 'status' in f || 'error' in f);
 
+  // The adapter heals a retired model id by itself, so this can pass while the configuration
+  // is still stale. Saying so is the difference between a check and a reassurance.
+  const healed = captured.find((f) => 'replacement' in f);
+
   if (failure) {
     const apiMessage = typeof failure.apiMessage === 'string' ? failure.apiMessage : undefined;
     console.error(`\n${red('✗')} ${bold('The provider refused the call.')}`);
@@ -275,8 +278,18 @@ async function main(): Promise<void> {
     console.log(`  ${named} ${dim(`(confidence ${candidate.confidence})`)}`);
   }
   console.log(
-    `\n${dim('Later searches YouTube for these and ranks the results; it never takes an id from the model.')}\n`,
+    `\n${dim('Later searches YouTube for these and ranks the results; it never takes an id from the model.')}`,
   );
+
+  if (healed) {
+    console.log(`\n${yellow('!')} ${bold('It worked, but your configured model is retired.')}`);
+    console.log(`  ${healed.configured} → ${bold(String(healed.replacement))}, on Google's own`);
+    console.log('  instruction. Later retried and carried on, and will keep doing so — but it');
+    console.log('  spends a failed request each time a fresh instance learns this again.');
+    console.log(`\n  Set ${bold(`LLM_MODEL=${healed.replacement}`)} in .env, then:`);
+    console.log(dim('    pnpm deploy:cloudflare'));
+  }
+  console.log('');
 }
 
 main().catch((error: unknown) => {
