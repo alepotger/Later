@@ -71,13 +71,21 @@ const FIXTURE_PLACEHOLDER = 'fixtures-mode-placeholder-not-a-secret';
 /**
  * Fallbacks for when LLM_MODEL is unset.
  *
- * These age. A provider retires a model ID and the default starts returning 404 — which looks
- * like a broken key or a broken deployment rather than a stale string, because nothing about
- * the symptom points at a name written months earlier. Set LLM_MODEL explicitly if Tier 2
- * starts failing; the 404 path logs how to find a current name.
+ * These age, and the comment predicting it was right. `gemini-2.5-flash` stopped being
+ * available *to new users* in October 2026 — existing projects kept working, so the default
+ * failed only for people deploying Later for the first time, which is the worst possible
+ * population to break. The symptom was a 404 that looks like a broken key or a broken
+ * deployment rather than a stale string written months earlier.
+ *
+ * Updated to the replacement Google's own error message names. It will age too. `pnpm
+ * check:llm` exists so the next person finds out in two seconds instead of an evening: it
+ * prints the API's message, the replacement named in it, and the models the key can use.
  */
-const DEFAULT_MODELS: Record<string, string> = {
-  gemini: 'gemini-2.5-flash',
+export const DEFAULT_MODELS: Partial<Record<LlmProvider, string>> & {
+  gemini: string;
+  'openai-compatible': string;
+} = {
+  gemini: 'gemini-3.8-flash',
   'openai-compatible': 'gpt-4o-mini',
 };
 

@@ -182,11 +182,11 @@ If you would rather read the logs directly — on Cloudflare `pnpm exec wrangler
 
 | What `apiMessage` says | What it means |
 |---|---|
-| `Your prepayment credits are depleted` | **The most common one.** The Gemini API is not free. Your key is fine; there is nothing to spend. Add credits at **https://ai.studio/projects** — one Tier 2 call is a few hundred tokens of Flash, so this is cents, not a subscription. |
-| something about an unknown or unsupported model | `LLM_MODEL` names a retired id. `.env.example` has a one-liner that lists the models your key can actually use. |
+| `no longer available to new users` or anything about an unknown model | **The one that actually bit.** `LLM_MODEL` names a retired id. Google retires models *for new keys first*, so this breaks first-time setup while every existing deployment carries on fine. The message names the replacement; `pnpm check:llm` pulls it out and also lists what your key can use. |
+| `Your prepayment credits are depleted` | No credit on the project. Add some at **https://ai.studio/projects** — one Tier 2 call is a few hundred tokens of Flash, so this is cents, not a subscription. |
 | `API key not valid` | The key is wrong or was revoked. Regenerate it. |
 
-Do **not** diagnose Tier 2 from the HTTP status alone. A credit-exhausted account was observed returning `404` to one call and `402` to the next for the same underlying problem, which sends you hunting a model name that was never wrong. That is why Later logs the body.
+Do **not** diagnose Tier 2 from the HTTP status alone. One key was seen returning `402` about billing and `404` about a retired model — two different faults, only one of them actually blocking, and the status codes could not tell them apart. Chasing the wrong one cost a first-time deployer an evening. The body said which was which in plain English the whole time, which is why Later logs it.
 
 **`gemini call threw`** — nothing came back: a timeout (12s), DNS, or a blocked egress. Check that your host can reach `generativelanguage.googleapis.com`.
 

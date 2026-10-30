@@ -54,10 +54,10 @@ async function withTimeout<T>(
 /**
  * Read what the API actually said, rather than inferring from the status code.
  *
- * A depleted-credits Gemini account was observed returning 404 to one call and 402 to the next,
- * so a status-based guess sent the operator hunting a retired model id while the body said
- * "Your prepayment credits are depleted" in plain English. The body is small, it is the only
- * authoritative account of the failure, and guessing at it costs more than reading it.
+ * One Gemini key was seen returning a 402 about billing and a 404 about a retired model. They
+ * were two different faults, only one of them blocking, and no status code could have told
+ * them apart — while the body said which was which in plain English the whole time. Guessing
+ * at a response that is sitting right there cost a first-time deployer an evening.
  *
  * Both error shapes are handled — Google's `{error:{message,status}}` and OpenAI's
  * `{error:{message,type,code}}` — because every provider here can fail for billing reasons and

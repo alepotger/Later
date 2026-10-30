@@ -103,3 +103,30 @@ It does change the honesty of the onboarding. Documentation told people Gemini w
 **What it does not change, deliberately:** the default stays `gemini`. An OpenAI-compatible endpoint also costs money, a local model cannot be reached from a Worker, and no option is free any more — so switching the default would trade one paid provider for another while invalidating every existing deployment's config. The right fix is accurate documentation, not a different default.
 
 **Standing correction to the method, not just the fact.** Phase 0 recorded this as "confirmed" from search results. A pricing or free-tier claim is not the kind of thing a search result confirms durably — it is a commercial policy that changes without notice and without a deprecation window. Claims of that shape now get recorded as *true when checked, and likely to drift*, not as verified constraints like the 2016 Watch Later removal, which is a fact about the past.
+
+---
+
+## Revision — 2026-10-30: the revision above was wrong, and wrong in an instructive way
+
+**The blocker was not billing. It was a retired model id.** With `pnpm check:llm` reading the response body, the same key and the same project said:
+
+```
+404  "This model models/gemini-2.5-flash is no longer available to new users.
+      Please update your code to use models/gemini-3.8-flash"
+```
+
+That is the actual reason Tier 2 never worked for this deployer. The default model in `src/config.ts` had been retired **for new users only** — existing projects kept working, so the breakage was invisible to anyone already running Later and total for anyone starting out. The comment above `DEFAULT_MODELS` predicted exactly this and was not acted on.
+
+**So what about the 402?** It was genuinely observed and is not retracted. But it was one response among several, it was never reproduced once the body was being read, and the free-tier question was never actually reached. The honest status of "does Gemini have a free tier in late 2026" is now **unresolved**, recorded as disputed in the verification log. The previous revision's confident *"It is no longer true"* overstated what one error body could support.
+
+**The methodological failure is mine and it is the same one twice.** The previous revision opens by condemning diagnosis from status codes — and then diagnoses a pricing policy from a single status body, with the same confidence and the same lack of reproduction. Reading the message instead of the status was progress; treating one message as a settled commercial fact was the identical error wearing a better costume.
+
+What generalises:
+
+- **One observation is an observation.** Writing it up as a falsified premise across four documents required a second one, and there wasn't a second one.
+- **A failure can have two causes at once.** The 402 and the 404 were both real. Finding a plausible explanation is not the same as finding the blocking one, and the blocking one is the only one that was ever worth four documents.
+- **Reversibility is a property worth designing for.** Keeping this as an append-only revision rather than an edit is what makes the correction cheap and the record honest.
+
+**What changes in the code:** `DEFAULT_MODELS.gemini` becomes `gemini-3.8-flash`, the replacement Google's own error names. It will age too — that is the nature of the field, not a defect in this choice. The mitigation is not a better guess but a faster feedback loop: `pnpm check:llm` prints the API's message, the replacement named in it, and the models the key can actually use, in one run and two seconds.
+
+**The decision to default to `gemini` is unchanged**, and now rests on its original and still-valid ground: it lives in the Google Cloud project the deployer already created for YouTube.

@@ -917,3 +917,28 @@ Worse, the same account returned **404** to one call and **402** to the next, so
 Every sentence above that calls Gemini free is wrong. This file is append-only, so they stay where they are; this note supersedes them.
 
 **Added with that correction: `pnpm check:llm`.** Run it in the project folder and it asks your configured provider one real question — the same prompt Tier 2 uses, through the same code — then prints either the video it named or the provider's own sentence explaining the refusal, with the next step. Two seconds, no deploy, no log reading. Every instruction above that has you deploy and share something to find out whether Tier 2 works can be replaced by this.
+
+---
+
+## Correction to the correction — 2026-10-30: it was not the billing
+
+**The note above is wrong about the cause.** With the response body being read, the same key and the same project gave the real answer:
+
+```
+404  "This model models/gemini-2.5-flash is no longer available to new users.
+      Please update your code to use models/gemini-3.8-flash"
+```
+
+Tier 2 was never blocked on credit. It was blocked on a model id that Google retires **for new keys first** — so it worked for everyone already running Later and failed for everyone setting it up, which is the worst possible way for a default to break, and the hardest to spot.
+
+**The fix is one line.** In `.env`:
+
+```dotenv
+LLM_MODEL=gemini-3.8-flash
+```
+
+Then `pnpm check:llm` to confirm, and `pnpm deploy:cloudflare` to send it to the Worker. If you never set `LLM_MODEL` at all, pulling the latest `main` is enough — the default now points at the same model.
+
+**About the 402.** It was really seen and it is not retracted, but it was one response, never reproduced once the body was being read, and the free-tier question was never actually reached. Whether Gemini still has a free allowance is **unresolved**, and the documents that declared it dead now say so. If `pnpm check:llm` reports a billing error on a working model id, that settles it; until then nobody should be told either way.
+
+**What went wrong on my side, since this file exists to record that.** The previous correction opens by warning against diagnosing from status codes, then diagnoses a pricing policy from a single error body with exactly the same confidence. One observation is an observation. Two causes can be live at once, and a plausible one is not the blocking one. The lesson that survives is narrower and better: read the message, fix what it names, and verify before writing it down — which is now a two-second command rather than an evening.
