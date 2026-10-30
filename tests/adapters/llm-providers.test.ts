@@ -3,9 +3,10 @@
  *
  * The success path is a thin wrapper over `parseCandidates`, which has its own tests. What is
  * asserted here is the failure reporting, because that is what a real deployment got wrong:
- * the adapter logged only an HTTP status, and a depleted-credits Gemini account answered 404
- * to one call and 402 to the next. The operator spent an evening replacing a model id that was
- * never wrong, while the response body said "Your prepayment credits are depleted" in English.
+ * the adapter logged only an HTTP status. One key returned a 402 about billing and a 404 about
+ * a retired model — two unrelated faults, only one of them blocking — and the status codes
+ * could not tell them apart. An evening went into the wrong one. Both response bodies named
+ * their own cause in plain English throughout.
  *
  * So: the body is read, the message is logged, and a failure never throws.
  */
@@ -69,21 +70,35 @@ describe('gemini adapter failure reporting', () => {
     });
   });
 
-  it('reports the same body when the status is the misleading 404', async () => {
-    // The exact pair observed in the field: one condition, two status codes. Whoever reads the
-    // log must reach the same conclusion either way, which only holds if the body is what is
-    // being read.
+  it('surfaces a retired model id, which a 404 alone cannot distinguish from billing', async () => {
+    // The response that was actually blocking Tier 2 in the field. The same key also produced
+    // the 402 above, so the two faults were indistinguishable by status — and the one that
+    // mattered was this one. Naming the replacement is the whole value of the line.
     const { logger, lines } = recordingLogger();
     const llm = geminiLlm(
       { apiKey: 'k', model: 'gemini-2.5-flash' },
-      { logger, fetch: respondWith(404, DEPLETED) },
+      {
+        logger,
+        fetch: respondWith(
+          404,
+          JSON.stringify({
+            error: {
+              code: 404,
+              message:
+                'This model models/gemini-2.5-flash is no longer available to new users. ' +
+                'Please update your code to use models/gemini-3.8-flash for the latest features.',
+              status: 'NOT_FOUND',
+            },
+          }),
+        ),
+      },
     );
 
     await llm.extractCandidates(INPUT);
 
-    expect(lines.find((line) => line.message === 'gemini call failed')?.fields.apiMessage).toBe(
-      'Your prepayment credits are depleted.',
-    );
+    const logged = lines.find((line) => line.message === 'gemini call failed')?.fields.apiMessage;
+    expect(logged).toContain('no longer available to new users');
+    expect(logged).toContain('models/gemini-3.8-flash');
   });
 
   it('still logs a usable line when the body is not JSON', async () => {

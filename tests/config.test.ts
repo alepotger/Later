@@ -285,7 +285,7 @@ describe('LLM provider wiring', () => {
   it('picks a sensible default model per provider', () => {
     const result = parseConfig({ ...MINIMAL, LLM_PROVIDER: 'gemini', GEMINI_API_KEY: 'k' });
     if (!result.ok) throw new Error('expected ok');
-    expect(result.config.llm.model).toBe('gemini-2.5-flash');
+    expect(result.config.llm.model).toBe('gemini-3.8-flash');
   });
 });
 

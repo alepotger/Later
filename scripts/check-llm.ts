@@ -18,6 +18,9 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { geminiLlm, openAiCompatibleLlm } from '../src/adapters/llm/providers.ts';
+// The same defaults the running app uses, imported rather than copied: a check that tests a
+// different model from the one production falls back to is a check that lies.
+import { DEFAULT_MODELS } from '../src/config.ts';
 import type { LlmPort } from '../src/ports/llm.ts';
 import type { LogFields, Logger } from '../src/ports/logger.ts';
 
@@ -61,13 +64,41 @@ function fail(message: string, ...detail: string[]): never {
 }
 
 /**
+ * Which models this key may call, newest-looking first.
+ *
+ * Best effort: returns an empty list rather than throwing, because this runs while already
+ * reporting a different failure and must not replace it with its own.
+ */
+async function listGeminiModels(apiKey: string): Promise<string[]> {
+  if (!apiKey) return [];
+  try {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+      headers: { 'x-goog-api-key': apiKey },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) return [];
+    const payload = (await response.json()) as {
+      models?: { name?: string; supportedGenerationMethods?: string[] }[];
+    };
+    return (payload.models ?? [])
+      .filter((model) => model.supportedGenerationMethods?.includes('generateContent'))
+      .map((model) => model.name?.replace(/^models\//, ''))
+      .filter((name): name is string => Boolean(name))
+      .sort((a, b) => b.localeCompare(a, 'en', { numeric: true }));
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Turn the provider's own words into the next thing to do.
  *
- * Keyed on the message text, never the status code: a credit-exhausted Gemini account was
- * observed answering 404 to one call and 402 to the next, which sends you hunting a model name
- * that was never wrong. See docs/adr/0009 and TROUBLESHOOTING.md.
+ * Keyed on the message text, never the status code. The same key was seen returning a 402
+ * about billing and a 404 about a retired model, and only the second was actually blocking —
+ * two genuinely different faults that no status code could have told apart. The body said
+ * which was which, in English, the whole time. See docs/adr/0009 and TROUBLESHOOTING.md.
  */
-function interpret(apiMessage: string | undefined, provider: string): string[] {
+async function interpret(apiMessage: string | undefined, provider: string): Promise<string[]> {
   const text = (apiMessage ?? '').toLowerCase();
   const billing =
     text.includes('prepayment credits') ||
@@ -85,13 +116,12 @@ function interpret(apiMessage: string | undefined, provider: string): string[] {
 
   if (billing) {
     return [
-      'The Gemini API has no free allowance on this project. Your key is fine; there is',
-      'nothing to spend against it.',
+      'There is no credit on this project to spend. The key itself is fine.',
       '',
       `  ${bold('Free thing to try first:')} make a key in a project with no billing attached,`,
       '  at https://aistudio.google.com/apikey → Create API key → in a new project.',
-      '  If a free tier is available to your account, that key will work and this costs you',
-      '  nothing to find out.',
+      '  If a free tier is available to your account, that key will work, and finding out',
+      '  costs nothing.',
       '',
       `  ${bold('If that fails too:')} fund the prepaid wallet in AI Studio itself, not in the`,
       '  Google Cloud console — https://aistudio.google.com/plan_information. Google Cloud',
@@ -103,16 +133,42 @@ function interpret(apiMessage: string | undefined, provider: string): string[] {
   }
 
   if (text.includes('not found') || text.includes('not supported') || text.includes('model')) {
-    return provider === 'gemini'
-      ? [
-          'That model id looks wrong or retired. List the ones this key can actually use:',
-          '',
-          dim('  curl -s -H "x-goog-api-key: $GEMINI_API_KEY" \\'),
-          dim('    https://generativelanguage.googleapis.com/v1beta/models | grep \'"name"\''),
-          '',
-          'Then set LLM_MODEL in .env to one of them.',
-        ]
-      : ['That model id looks wrong or retired. Check LLM_MODEL against what the endpoint offers.'];
+    if (provider !== 'gemini') {
+      return [
+        'That model id looks wrong or retired. Check LLM_MODEL against what the endpoint offers.',
+      ];
+    }
+
+    // Printing a curl command here was lazy: the script holds the key, so it can just run the
+    // query and hand over the answer. Telling someone the next command to type, when you could
+    // have typed it for them, is how a two-second check becomes another round trip.
+    const lines = ['That model id is wrong or retired.'];
+
+    // Google's retirement message names the replacement. Quote it first — it is the single
+    // most useful sentence in this whole script, and it came from the API, not from me.
+    // Anchored on "use models/…" so it picks the *replacement*, not the broken id earlier in
+    // the same sentence. The trailing strip is for a model id that ends the sentence: version
+    // numbers mean dots are legal inside the name, so the pattern cannot simply exclude them.
+    const suggested = /\buse\s+models\/([\w.-]+)/i
+      .exec(apiMessage ?? '')?.[1]
+      ?.replace(/[.,;:]+$/, '');
+    if (suggested) {
+      lines.push('', `  Google names the replacement itself: ${bold(suggested)}`);
+      lines.push(`  Put ${bold(`LLM_MODEL=${suggested}`)} in .env and run this again.`);
+    }
+
+    const available = await listGeminiModels(process.env.GEMINI_API_KEY?.trim() ?? '');
+    if (available.length > 0) {
+      lines.push('', `  ${bold('Models this key can actually use:')}`);
+      for (const name of available.slice(0, 15)) lines.push(`    ${name}`);
+      if (available.length > 15) lines.push(dim(`    …and ${available.length - 15} more`));
+    } else if (!suggested) {
+      lines.push('', '  Could not list the available models — check the key and try again.');
+    }
+
+    lines.push('', '  Then redeploy, so the running instance gets it too:');
+    lines.push(dim('    pnpm deploy:cloudflare'));
+    return lines;
   }
 
   if (text.includes('api key') || text.includes('api_key') || text.includes('permission')) {
@@ -147,7 +203,7 @@ function buildProvider(logger: Logger): { port: LlmPort; label: string; provider
     if (!apiKey) {
       fail('LLM_PROVIDER=gemini but GEMINI_API_KEY is empty in .env.');
     }
-    const model = process.env.LLM_MODEL?.trim() || 'gemini-2.5-flash';
+    const model = process.env.LLM_MODEL?.trim() || DEFAULT_MODELS.gemini;
     return { port: geminiLlm({ apiKey, model }, { logger }), label: `gemini · ${model}`, provider };
   }
 
@@ -156,7 +212,7 @@ function buildProvider(logger: Logger): { port: LlmPort; label: string; provider
     if (!baseUrl) {
       fail('LLM_PROVIDER=openai-compatible but OPENAI_BASE_URL is empty in .env.');
     }
-    const model = process.env.LLM_MODEL?.trim() || 'gpt-4o-mini';
+    const model = process.env.LLM_MODEL?.trim() || DEFAULT_MODELS['openai-compatible'];
     const apiKey = process.env.OPENAI_API_KEY?.trim() || undefined;
     return {
       port: openAiCompatibleLlm({ baseUrl, apiKey, model }, { logger }),
@@ -195,7 +251,7 @@ async function main(): Promise<void> {
     if (failure.status !== undefined) console.error(dim(`  HTTP ${failure.status}`));
     if (typeof failure.error === 'string') console.error(`  ${failure.error}`);
 
-    const advice = interpret(apiMessage ?? (failure.error as string | undefined), provider);
+    const advice = await interpret(apiMessage ?? (failure.error as string | undefined), provider);
     if (advice.length > 0) {
       console.error('');
       for (const line of advice) console.error(`  ${line}`);

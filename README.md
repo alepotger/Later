@@ -36,7 +36,7 @@ Start with [SETUP.md](SETUP.md) to run it locally, or [DEPLOY.md](DEPLOY.md) to 
 
 **Verified live on 2026-10-29:** a real Google OAuth round-trip, on a Cloudflare Workers deployment made from this repo — consent, encrypted refresh token, playlist created, quota recorded. The Docker image is built, started and shared through by CI on every commit. Still unverified: Telegram and the phone clients, which need a device. Tracked in [PLAN.md](PLAN.md) and [docs/verification-log.md](docs/verification-log.md).
 
-**Tier 2 is not free.** The optional LLM step needs a paid API key — Gemini has no free allowance for new projects as of late 2026. Tiers 0 and 1 cost nothing and handle any share whose text contains the link. See [SETUP.md](SETUP.md).
+**Tier 2 may cost money, and model ids rot.** The optional LLM step needs an API key, and whether Gemini still has a free allowance in late 2026 is genuinely unclear — see [ADR-0009](docs/adr/0009-llm-provider-and-the-gemini-question.md). Run `pnpm check:llm` and it will tell you in two seconds what your own key can and cannot do. Tiers 0 and 1 cost nothing and handle any share whose text contains the link.
 
 Later is being built in phases, and `main` is kept working at every phase boundary. See [PLAN.md](PLAN.md) for what's built and what's next.
 
