@@ -2,7 +2,7 @@
 
 Living document. Updated at every phase boundary and whenever a decision changes.
 
-**Current state: Phase 4 code-complete. Every phase in the plan is built. 504 tests, all green, none needing credentials.**
+**Current state: Phase 4 code-complete. Every phase in the plan is built. 511 tests, all green, none needing credentials.**
 
 Four things are written and tested but not yet verified against reality, all for the same reason — this build environment has no credentials, no phone, no Docker daemon, and no route to `api.telegram.org`:
 
